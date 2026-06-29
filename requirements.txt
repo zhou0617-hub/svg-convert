@@ -1,0 +1,7 @@
+Flask>=3.0
+Flask-SQLAlchemy
+Flask-Login
+Pillow
+vtracer
+requests
+python-dotenv

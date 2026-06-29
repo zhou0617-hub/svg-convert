@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG 精准矢量平台</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f1f5f9; color: #1e293b; padding: 20px; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; background: white; padding: 12px 24px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 20px; }
+        .top-bar h1 { font-weight: 600; color: #4f46e5; }
+        .btn { background: #6366f1; color: white; border: none; padding: 8px 16px; border-radius: 10px; font-weight: 500; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 4px; }
+        .btn:hover { background: #4f46e5; transform: translateY(-1px); }
+        .btn-success { background: #10b981; }
+        .btn-warning { background: #f59e0b; }
+        .tabs { display: flex; gap: 6px; margin-bottom: 0; flex-wrap: wrap; }
+        .tab { padding: 10px 18px; background: white; border: none; border-radius: 12px 12px 0 0; cursor: pointer; font-weight: 500; color: #64748b; box-shadow: 0 -1px 4px rgba(0,0,0,0.02); }
+        .tab.active { background: #4f46e5; color: white; }
+        .panel { display: none; background: white; padding: 24px; border-radius: 0 16px 16px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+        .panel.active { display: block; }
+        input, select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 0.95rem; }
+        .flex-row { display: flex; gap: 24px; flex-wrap: wrap; }
+        .grow { flex: 1; min-width: 280px; }
+        canvas { border: 1px solid #e2e8f0; border-radius: 12px; width: 100%; height: 500px; background: white; }
+        .asset-list { list-style: none; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+        .asset-list li { padding: 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+        .asset-list li:hover { background: #f8fafc; }
+        .preview-box { background: #f8fafc; border-radius: 12px; padding: 12px; min-height: 250px; display: flex; align-items: center; justify-content: center; overflow: auto; }
+        .preview-box object { width: 100%; height: auto; min-height: 200px; display: block; }
+        .zoom-controls { margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+        .zoom-controls button { background: white; border: 1px solid #cbd5e1; border-radius: 8px; width: 32px; height: 32px; cursor: pointer; }
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+        .toast { padding: 12px 20px; border-radius: 10px; color: white; font-weight: 500; animation: slideIn 0.3s; }
+        .toast-success { background: #10b981; }
+        .toast-error { background: #ef4444; }
+        .toast-info { background: #3b82f6; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .auth-panel { max-width: 380px; margin: 80px auto; background: white; padding: 32px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <h1>🎨 SVG 防污染矢量平台</h1>
+        <div><span id="usernameDisplay"></span><button class="btn" id="logoutBtn" style="display:none" onclick="logout()">退出</button></div>
+    </div>
+    <div id="authPanel" class="auth-panel">
+        <h3 style="text-align:center; color:#4f46e5;">登录</h3>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <input type="text" id="loginUsername" placeholder="用户名">
+            <input type="password" id="loginPassword" placeholder="密码">
+            <button class="btn" onclick="login()">登 录</button>
+            <button class="btn" onclick="register()" style="background:#f1f5f9; color:#334155;">注 册</button>
+            <div id="loginError" style="color:red; text-align:center;"></div>
+        </div>
+    </div>
+    <div id="workspace" style="display:none;">
+        <div class="tabs">
+            <button class="tab active" data-tab="tab-draw">✏️ 手动绘制</button>
+            <button class="tab" data-tab="tab-vectorize">🖼️ 图片转矢量</button>
+            <button class="tab" data-tab="tab-library">🗂️ 资产库</button>
+        </div>
+        <div id="tab-draw" class="panel active">
+            <div style="margin-bottom:12px;">
+                <button class="btn" onclick="addRect()">矩形</button>
+                <button class="btn" onclick="addCircle()">圆形</button>
+                <button class="btn" onclick="toggleDraw()">画笔</button>
+                <button class="btn" onclick="deleteSelected()">删除</button>
+                <button class="btn btn-warning" onclick="clearCanvas()">清空</button>
+                <button class="btn btn-success" onclick="saveDrawing()">保存画布</button>
+            </div>
+            <canvas id="c" width="800" height="600"></canvas>
+        </div>
+        <div id="tab-vectorize" class="panel">
+            <h3>图片转矢量 — 防污染模式</h3>
+            <p style="color:#64748b; margin-bottom:12px;">采用挖空分层算法，颜色绝不越界，轮廓清晰。</p>
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                <input type="file" id="imgFileInput" accept="image/*">
+                <!-- 不再需要风格选择 -->
+                <button class="btn" onclick="vectorizeImg()" id="vectorizeBtn">转换为 SVG</button>
+                <span id="vectorizeStatus" style="color:red; font-size:0.9em;"></span>
+            </div>
+        </div>
+        <div id="tab-library" class="panel">
+            <div class="flex-row">
+                <div class="grow">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3>我的资产</h3>
+                        <button class="btn" onclick="loadAssetList()">刷新</button>
+                    </div>
+                    <ul class="asset-list" id="assetList"></ul>
+                </div>
+                <div class="grow">
+                    <h3 style="margin-bottom:12px;">预览（矢量缩放）</h3>
+                    <div class="zoom-controls">
+                        <button onclick="zoomOut()">−</button>
+                        <span id="zoomPercent" style="min-width:45px; text-align:center; font-weight:500;">100%</span>
+                        <button onclick="zoomIn()">+</button>
+                        <button class="btn" onclick="zoomReset()" style="margin-left:8px;">适应</button>
+                    </div>
+                    <div class="preview-box" id="previewWrapper">
+                        <span style="color:#94a3b8;">点击资产列表预览</span>
+                    </div>
+                    <a id="openOriginalLink" href="#" target="_blank" style="display:none; margin-top:8px;">🔍 新窗口查看原图</a>
+                <a id="downloadLink" href="#" download style="display:none; margin-top:4px; margin-left:10px;">⬇️ 下载 SVG</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        let currentUser = null;
+        const canvas = new fabric.Canvas('c', { backgroundColor: 'white' });
+
+        function showToast(msg, type='info') {
+            const c = document.getElementById('toastContainer');
+            const t = document.createElement('div');
+            t.className = `toast toast-${type}`;
+            t.textContent = msg;
+            c.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+        function showLoading(btn) {
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 处理中...';
+            return () => { btn.disabled = false; btn.innerHTML = orig; };
+        }
+
+        async function login() {
+            const u = document.getElementById('loginUsername').value.trim();
+            const p = document.getElementById('loginPassword').value.trim();
+            if(!u||!p) return;
+            const res = await fetch('/auth/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:u, password:p})});
+            const data = await res.json();
+            if(res.ok) { currentUser = data.username; showWorkspace(); showToast('登录成功','success'); }
+            else document.getElementById('loginError').textContent = data.error || '登录失败';
+        }
+        async function register() {
+            const u = document.getElementById('loginUsername').value.trim();
+            const p = document.getElementById('loginPassword').value.trim();
+            if(!u||!p) return;
+            const res = await fetch('/auth/register', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:u, password:p})});
+            const data = await res.json();
+            if(res.ok) { currentUser = data.username; showWorkspace(); showToast('注册成功','success'); }
+            else document.getElementById('loginError').textContent = data.error || '注册失败';
+        }
+        async function logout() {
+            await fetch('/auth/logout');
+            currentUser = null;
+            document.getElementById('authPanel').style.display='block';
+            document.getElementById('workspace').style.display='none';
+            showToast('已退出','info');
+        }
+        function showWorkspace() {
+            document.getElementById('authPanel').style.display='none';
+            document.getElementById('workspace').style.display='block';
+            document.getElementById('usernameDisplay').textContent = '👤 ' + currentUser;
+            document.getElementById('logoutBtn').style.display='inline-flex';
+            loadAssetList();
+        }
+        fetch('/auth/me').then(r=>r.json()).then(d => { if(d.username) { currentUser=d.username; showWorkspace(); } });
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById(this.dataset.tab).classList.add('active');
+            });
+        });
+
+        function addRect() { const r = new fabric.Rect({ left:100,top:100,fill:'#6366f1',width:80,height:60,rx:8,ry:8 }); canvas.add(r); canvas.setActiveObject(r); canvas.isDrawingMode=false; }
+        function addCircle() { const c = new fabric.Circle({ left:200,top:200,fill:'#f472b6',radius:40 }); canvas.add(c); canvas.setActiveObject(c); canvas.isDrawingMode=false; }
+        function toggleDraw() { canvas.isDrawingMode = !canvas.isDrawingMode; if(canvas.isDrawingMode){ canvas.freeDrawingBrush.width=5; canvas.freeDrawingBrush.color='#1e293b'; } }
+        function deleteSelected() { const o = canvas.getActiveObject(); if(o){ canvas.remove(o); canvas.discardActiveObject(); } }
+        function clearCanvas() { canvas.clear(); canvas.backgroundColor='white'; }
+        async function saveDrawing() {
+            const svg = canvas.toSVG();
+            const blob = new Blob([svg], {type:'image/svg+xml'});
+            const fd = new FormData(); fd.append('file', blob, 'drawing.svg');
+            const res = await fetch('/upload', {method:'POST', body:fd});
+            if(res.ok) { loadAssetList(); showToast('画布已保存！','success'); }
+            else showToast('保存失败','error');
+        }
+
+        // 矢量化（不再传 style 参数，后端会忽略）
+        async function vectorizeImg() {
+            const file = document.getElementById('imgFileInput').files[0];
+            if(!file) { showToast('请选择图片','error'); return; }
+            const fd = new FormData(); fd.append('file', file);
+            // 不传 style，后端默认为防污染处理
+            const btn = document.getElementById('vectorizeBtn');
+            const finish = showLoading(btn);
+            try {
+                const res = await fetch('/vectorize', {method:'POST', body:fd});
+                if(res.ok) { loadAssetList(); showToast('矢量图转换完成，颜色无污染！','success'); }
+                else { const data = await res.json(); showToast('转换失败: '+(data.error||'服务器错误'),'error'); }
+            } catch(e) { showToast('网络错误','error'); }
+            finally { finish(); }
+        }
+
+        async function loadAssetList() {
+            const res = await fetch('/assets');
+            const data = await res.json();
+            const list = document.getElementById('assetList');
+            list.innerHTML = '';
+            data.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = item.original_name;
+                li.onclick = () => loadPreview(item.filename);
+                list.appendChild(li);
+            });
+        }
+
+        let currentZoom = 1.0;
+        function updateZoom() {
+            document.getElementById('zoomPercent').textContent = Math.round(currentZoom*100)+'%';
+            const obj = document.querySelector('#previewWrapper object');
+            if(obj) {
+                obj.style.width = (currentZoom*100)+'%';
+                obj.style.height = 'auto';
+            }
+        }
+        function zoomIn() { currentZoom = Math.min(currentZoom+0.2, 5.0); updateZoom(); }
+        function zoomOut() { currentZoom = Math.max(currentZoom-0.2, 0.2); updateZoom(); }
+        function zoomReset() { currentZoom = 1.0; updateZoom(); }
+
+        function loadPreview(filename) {
+            const wrapper = document.getElementById('previewWrapper');
+            const link = document.getElementById('openOriginalLink');
+            const dlink = document.getElementById('downloadLink');
+            wrapper.innerHTML = `<object data="/svg/${filename}" type="image/svg+xml" style="width:100%; height:auto; min-height:200px;"></object>`;
+            const url = '/svg/' + filename;
+            link.href = url;
+            link.style.display = 'inline-block';
+            dlink.href = url;
+            dlink.style.display = 'inline-block';
+            currentZoom = 1.0;
+            updateZoom();
+        }
+    </script>
+</body>
+</html>

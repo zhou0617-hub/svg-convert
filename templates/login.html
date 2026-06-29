@@ -7,10 +7,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
-<base target="_blank">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}?v=3">
 </head>
 <body>
+    <!-- Three.js 背景 -->
+    <canvas id="three-bg" style="position:fixed;inset:0;z-index:0;pointer-events:none;"></canvas>
+
     <div class="login-container">
         <div class="login-card">
             <!-- 左侧装饰 -->
@@ -55,7 +58,6 @@
                     <p>登录您的账号</p>
                 </div>
 
-                <!-- 登录表单 -->
                 <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)">
                     <div class="form-group">
                         <label>用户名</label>
@@ -82,6 +84,8 @@
     <!-- Toast -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="{{ url_for('static', filename='js/three-bg.js') }}"></script>
     <script src="{{ url_for('static', filename='js/login.js') }}"></script>
 </body>
 </html>

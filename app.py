@@ -6,7 +6,7 @@ from flask_login import LoginManager, UserMixin, current_user
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = 'change-me-in-production'
-    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 支持批量上传
     app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
     app.config['DATABASE'] = os.path.join(os.getcwd(), 'data.db')
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -60,14 +60,12 @@ def create_app():
 
     # ========== 页面路由 ==========
     
-    # 根路径：未登录→登录页，已登录→格式转换
     @app.route('/')
     def index():
         if current_user.is_authenticated:
             return redirect(url_for('convert_page'))
         return render_template('login.html')
 
-    # 格式转换页面（原首页）
     @app.route('/convert')
     def convert_page():
         if not current_user.is_authenticated:
@@ -82,7 +80,6 @@ def create_app():
 
     @app.route('/community')
     def community_page():
-        # 社区可以公开访问，但登录后显示不同
         return render_template('community.html', active_page='community')
 
     @app.route('/profile')
@@ -97,7 +94,6 @@ def create_app():
             return redirect(url_for('convert_page'))
         return render_template('login.html')
 
-    # 注册页
     @app.route('/register')
     def register():
         if current_user.is_authenticated:
@@ -112,7 +108,9 @@ def init_db(db_path):
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL
+            password_hash TEXT NOT NULL,
+            nickname TEXT DEFAULT "",
+            avatar TEXT DEFAULT ""
         )
     ''')
     db.execute('''

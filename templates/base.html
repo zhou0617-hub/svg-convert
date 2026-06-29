@@ -1,20 +1,19 @@
 ﻿<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>{% block title %}SVG 转换工坊{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}?v=7">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- 粒子背景 -->
+    <canvas id="three-bg" style="position:fixed;inset:0;z-index:0;pointer-events:none;"></canvas>
     <div class="particles" id="particles"></div>
 
-    <!-- 顶部导航 -->
     <nav class="navbar">
         <div class="nav-left">
             <a href="/convert" class="nav-brand">
@@ -31,40 +30,88 @@
                 <a href="/community" class="nav-link {% if active_page == 'community' %}active{% endif %}">浏览社区</a>
             </div>
         </div>
-        <div class="nav-right" id="navUser">
-            <!-- 由 JS 动态填充：未登录显示登录按钮，已登录显示头像下拉 -->
+        <div class="nav-right">
+            <!-- 主题切换滑块 -->
+            <div class="theme-switch-wrapper">
+                <label class="theme-switch">
+                    <input type="checkbox" id="themeCheckbox" onchange="toggleTheme()">
+                    <span class="theme-slider">
+                        <span class="theme-icons">
+                            <span class="theme-icon sun">☀️</span>
+                            <span class="theme-icon moon">🌙</span>
+                        </span>
+                    </span>
+                </label>
+            </div>
+            <!-- 用户信息容器 -->
+            <div id="navUser"></div>
         </div>
     </nav>
 
-    <!-- 主内容 -->
     <main class="main-container">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- 页脚 -->
     <footer class="footer">
         <p>SVG 转换工坊 · 让每一张图片都成为矢量艺术</p>
     </footer>
 
-    <!-- Toast 通知 -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- SVG 预览弹窗 -->
-    <div class="modal modal-lg" id="svgModal">
-        <div class="modal-backdrop" onclick="hideModal('svgModal')"></div>
+    <!-- 历史详情弹窗（全局） -->
+    <div class="modal modal-lg" id="historyDetailModal">
+        <div class="modal-backdrop" onclick="hideModal('historyDetailModal')"></div>
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="svgModalTitle">SVG 详情</h3>
-                <button class="modal-close" onclick="hideModal('svgModal')">&times;</button>
+                <h3 id="detailModalTitle">历史详情</h3>
+                <button class="modal-close" onclick="hideModal('historyDetailModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="svg-preview-large" id="svgPreviewLarge"></div>
-                <textarea class="svg-code" id="svgCode" readonly></textarea>
+                <div class="compare-view">
+                    <div class="compare-item">
+                        <span class="compare-label">原图</span>
+                        <div class="compare-img-wrapper" id="detailOriginalWrapper">
+                            <img id="detailOriginalImg" src="" alt="原图">
+                            <div class="zoom-controls">
+                                <button class="zoom-btn" onclick="window.zoomDetailImage && zoomDetailImage('original', -0.2)">−</button>
+                                <span class="zoom-level" id="detailZoomOriginal">100%</span>
+                                <button class="zoom-btn" onclick="window.zoomDetailImage && zoomDetailImage('original', 0.2)">+</button>
+                                <button class="zoom-btn" onclick="window.resetDetailZoom && resetDetailZoom('original')">⟲</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="compare-divider">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                    <div class="compare-item">
+                        <span class="compare-label">SVG 矢量图</span>
+                        <div class="compare-img-wrapper" id="detailSvgWrapper">
+                            <div id="detailSvgDisplay"></div>
+                            <div class="zoom-controls">
+                                <button class="zoom-btn" onclick="window.zoomDetailImage && zoomDetailImage('svg', -0.2)">−</button>
+                                <span class="zoom-level" id="detailZoomSvg">100%</span>
+                                <button class="zoom-btn" onclick="window.zoomDetailImage && zoomDetailImage('svg', 0.2)">+</button>
+                                <button class="zoom-btn" onclick="window.resetDetailZoom && resetDetailZoom('svg')">⟲</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="work-meta-bar" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <span id="detailDate"></span>
+                    <div class="work-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn btn-ghost btn-sm" onclick="window.copyDetailSvg && copyDetailSvg()">复制 SVG</button>
+                        <button class="btn btn-primary btn-sm" onclick="window.downloadDetailSvg && downloadDetailSvg()">下载</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/base.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="{{ url_for('static', filename='js/three-bg.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/base.js') }}?v=7"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -3,727 +3,140 @@
 {% block title %}个人中心 | SVG 转换工坊{% endblock %}
 
 {% block extra_css %}
-<style>
-
-:root {
-    --primary: #6366f1;
-    --primary-hover: #4f46e5;
-    --primary-light: #e0e7ff;
-    --bg: #f8fafc;
-    --card-bg: #ffffff;
-    --text-primary: #1e293b;
-    --text-secondary: #64748b;
-    --text-muted: #94a3b8;
-    --border: #e2e8f0;
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    --radius: 16px;
-    --radius-sm: 12px;
-    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.profile-page {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 32px 24px;
-}
-
-/* 页面标题 */
-.page-header {
-    margin-bottom: 32px;
-}
-
-.page-header h1 {
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 0 0 8px 0;
-    letter-spacing: -0.5px;
-}
-
-.page-header p {
-    font-size: 15px;
-    color: var(--text-secondary);
-    margin: 0;
-}
-
-/* 布局 */
-.profile-layout {
-    display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: 24px;
-    align-items: start;
-}
-
-@media (max-width: 900px) {
-    .profile-layout {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* 卡片基础样式 */
-.profile-card {
-    background: var(--card-bg);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    border: 1px solid var(--border);
-    padding: 24px;
-    transition: var(--transition);
-}
-
-.profile-card:hover {
-    box-shadow: var(--shadow-lg);
-}
-
-/* 左侧边栏 */
-.profile-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    position: sticky;
-    top: 24px;
-}
-
-/* 个人信息卡片 */
-.profile-info-card {
-    text-align: center;
-    padding: 32px 24px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    color: white;
-    position: relative;
-    overflow: hidden;
-}
-
-.profile-info-card::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    right: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-    animation: float 6s ease-in-out infinite;
-}
-
-@keyframes float {
-    0%, 100% { transform: translate(0, 0) rotate(0deg); }
-    50% { transform: translate(-20px, -20px) rotate(5deg); }
-}
-
-.profile-avatar-section {
-    position: relative;
-    z-index: 1;
-}
-
-.profile-avatar {
-    width: 88px;
-    height: 88px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.2);
-    backdrop-filter: blur(10px);
-    border: 3px solid rgba(255,255,255,0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 36px;
-    font-weight: 700;
-    color: white;
-    margin: 0 auto 16px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-}
-
-.profile-username {
-    font-size: 22px;
-    font-weight: 600;
-    margin: 0 0 6px 0;
-    color: white;
-}
-
-.profile-id {
-    font-size: 13px;
-    color: rgba(255,255,255,0.8);
-    margin: 0;
-    font-family: 'Courier New', monospace;
-    letter-spacing: 0.5px;
-}
-
-/* 统计信息 */
-.profile-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-top: 24px;
-    position: relative;
-    z-index: 1;
-    padding-top: 20px;
-    border-top: 1px solid rgba(255,255,255,0.15);
-}
-
-.stat-item {
-    text-align: center;
-}
-
-.stat-value {
-    display: block;
-    font-size: 28px;
-    font-weight: 700;
-    color: white;
-    line-height: 1;
-    margin-bottom: 4px;
-}
-
-.stat-label {
-    font-size: 12px;
-    color: rgba(255,255,255,0.7);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-/* 操作按钮卡片 */
-.profile-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.action-btn {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 14px 18px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--card-bg);
-    color: var(--text-primary);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: var(--transition);
-    text-align: left;
-}
-
-.action-btn:hover {
-    background: var(--primary-light);
-    border-color: var(--primary);
-    color: var(--primary);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow);
-}
-
-.action-btn svg {
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.action-btn .action-arrow {
-    margin-left: auto;
-    opacity: 0.4;
-    transition: var(--transition);
-}
-
-.action-btn:hover .action-arrow {
-    opacity: 1;
-    transform: translateX(4px);
-}
-
-/* 主内容区 */
-.profile-main {
-    min-width: 0;
-}
-
-/* 历史记录工具栏 */
-.history-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--border);
-}
-
-.card-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0;
-}
-
-.card-title svg {
-    width: 22px;
-    height: 22px;
-    stroke: var(--primary);
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.history-count {
-    font-size: 13px;
-    color: var(--text-muted);
-    background: var(--bg);
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-weight: 500;
-}
-
-/* 历史列表 */
-.history-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 16px;
-}
-
-@media (max-width: 600px) {
-    .history-list {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-.mini-history-card {
-    background: var(--bg);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    cursor: pointer;
-    transition: var(--transition);
-    border: 1px solid var(--border);
-    position: relative;
-}
-
-.mini-history-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-lg);
-    border-color: var(--primary);
-}
-
-.mini-history-card img {
-    width: 100%;
-    aspect-ratio: 1;
-    object-fit: cover;
-    display: block;
-    transition: var(--transition);
-}
-
-.mini-history-card:hover img {
-    transform: scale(1.05);
-}
-
-.mini-info {
-    padding: 12px;
-}
-
-.mini-name {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-primary);
-    margin: 0 0 4px 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.mini-date {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin: 0;
-}
-
-/* 加载状态 */
-.loading-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    grid-column: 1 / -1;
-}
-
-.loading-state .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid var(--border);
-    border-top-color: var(--primary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-bottom: 16px;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-.loading-state p {
-    color: var(--text-secondary);
-    font-size: 14px;
-    margin: 0;
-}
-
-/* 空状态 */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    text-align: center;
-    grid-column: 1 / -1;
-}
-
-.empty-state svg {
-    width: 72px;
-    height: 72px;
-    stroke: var(--text-muted);
-    fill: none;
-    stroke-width: 1.5;
-    margin-bottom: 20px;
-    opacity: 0.6;
-}
-
-.empty-state h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0 0 8px 0;
-}
-
-.empty-state p {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin: 0 0 24px 0;
-}
-
-.btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 20px;
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: var(--transition);
-    border: none;
-    text-decoration: none;
-}
-
-.btn-primary {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
-    color: white;
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
-}
-
-.btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
-}
-
-.btn-sm {
-    padding: 8px 16px;
-    font-size: 13px;
-}
-
-/* ============================================
-   弹窗样式
-   ============================================ */
-
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.6);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
-    padding: 20px;
-}
-
-.modal-overlay.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-.modal-box {
-    background: var(--card-bg);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-lg);
-    width: 100%;
-    max-width: 420px;
-    max-height: 90vh;
-    overflow: hidden;
-    transform: scale(0.95) translateY(10px);
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.modal-overlay.active .modal-box {
-    transform: scale(1) translateY(0);
-}
-
-.modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border);
-}
-
-.modal-header h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.modal-header h3 svg {
-    width: 20px;
-    height: 20px;
-    stroke: var(--primary);
-    fill: none;
-    stroke-width: 2;
-}
-
-.modal-close {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: none;
-    background: var(--bg);
-    color: var(--text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition);
-}
-
-.modal-close:hover {
-    background: #fee2e2;
-    color: #ef4444;
-}
-
-.modal-close svg {
-    width: 18px;
-    height: 18px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.modal-body {
-    padding: 24px;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group:last-child {
-    margin-bottom: 0;
-}
-
-.form-group label {
-    display: block;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-}
-
-.form-group input {
-    width: 100%;
-    padding: 12px 14px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    color: var(--text-primary);
-    background: var(--bg);
-    transition: var(--transition);
-    box-sizing: border-box;
-}
-
-.form-group input:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-    background: var(--card-bg);
-}
-
-.form-group input::placeholder {
-    color: var(--text-muted);
-}
-
-.modal-footer {
-    display: flex;
-    gap: 12px;
-    padding: 0 24px 24px;
-}
-
-.btn-block {
-    width: 100%;
-    justify-content: center;
-    padding: 12px;
-}
-
-.btn-secondary {
-    background: var(--bg);
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
-}
-
-.btn-secondary:hover {
-    background: var(--border);
-    color: var(--text-primary);
-}
-
-/* 按钮加载状态 */
-.btn .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    display: inline-block;
-}
-
-.btn.loading .btn-text {
-    display: none;
-}
-
-.btn.loading .spinner {
-    display: inline-block !important;
-}
-
-/* Toast 提示 */
-.toast-container {
-    position: fixed;
-    top: 24px;
-    right: 24px;
-    z-index: 2000;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.toast {
-    padding: 14px 20px;
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    font-weight: 500;
-    color: white;
-    box-shadow: var(--shadow-lg);
-    animation: toastIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    max-width: 360px;
-}
-
-.toast.success { background: linear-gradient(135deg, #10b981, #059669); }
-.toast.error { background: linear-gradient(135deg, #ef4444, #dc2626); }
-
-@keyframes toastIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-.toast-out {
-    animation: toastOut 0.3s ease forwards;
-}
-
-@keyframes toastOut {
-    to { transform: translateX(100%); opacity: 0; }
-}
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}?v=5">
 {% endblock %}
 
 {% block content %}
 <div class="profile-page">
-    <div class="page-header">
-        <h1>个人中心</h1>
-        <p>管理您的账户信息和转换记录</p>
+    <!-- 封面 Banner -->
+    <div class="profile-banner">
+        <div class="banner-content">
+            <div class="banner-text">
+                <h1>👋 欢迎回来</h1>
+                <p id="bannerGreeting">管理您的账户和作品</p>
+            </div>
+            <div class="banner-stats">
+                <div class="banner-stat">
+                    <span class="banner-stat-num" id="bannerTotal">0</span>
+                    <span class="banner-stat-label">总转换</span>
+                </div>
+                <div class="banner-stat">
+                    <span class="banner-stat-num" id="bannerMonth">0</span>
+                    <span class="banner-stat-label">本月</span>
+                </div>
+                <div class="banner-stat">
+                    <span class="banner-stat-num" id="bannerRank">🏆</span>
+                    <span class="banner-stat-label">活跃度</span>
+                </div>
+            </div>
+        </div>
+        <div class="banner-decoration">
+            <div class="deco-circle deco-1"></div>
+            <div class="deco-circle deco-2"></div>
+            <div class="deco-circle deco-3"></div>
+        </div>
     </div>
 
     <div class="profile-layout">
-        <!-- 左侧：个人信息 -->
+        <!-- 左侧 -->
         <aside class="profile-sidebar">
             <div class="profile-card profile-info-card">
-                <div class="profile-avatar-section">
-                    <div class="profile-avatar" id="profileAvatar">?</div>
-                    <h2 class="profile-username" id="profileUsername">加载中...</h2>
-                    <p class="profile-id" id="profileId">ID: --</p>
+                <div class="profile-avatar-wrapper">
+                    <div class="profile-avatar" id="profileAvatar" onclick="document.getElementById('avatarInput').click()">
+                        ?
+                    </div>
+                    <input type="file" id="avatarInput" accept="image/*" style="display:none;" onchange="uploadAvatar(event)">
+                    <div class="avatar-edit-hint">点击更换</div>
                 </div>
-
-                <div class="profile-stats">
-                    <div class="stat-item">
-                        <span class="stat-value" id="statTotal">0</span>
-                        <span class="stat-label">总转换</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="statPublic">0</span>
-                        <span class="stat-label">本月</span>
-                    </div>
+                <h2 class="profile-username" id="profileUsername">加载中...</h2>
+                <p class="profile-id" id="profileId">ID: --</p>
+                <div class="nickname-row">
+                    <input type="text" id="nicknameInput" placeholder="设置昵称" value="">
+                    <button class="btn btn-primary btn-sm" onclick="updateNickname()">更新</button>
                 </div>
             </div>
 
-            <!-- 操作按钮 -->
-            <div class="profile-card profile-actions">
-                <button class="action-btn" onclick="openPasswordModal()">
-                    <svg viewBox="0 0 24 24">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                        <path d="M7 11V7a5 5 0 0110 0v4"/>
-                    </svg>
-                    <span>修改密码</span>
-                    <svg class="action-arrow" viewBox="0 0 24 24" width="16" height="16">
-                        <polyline points="9 18 15 12 9 6"/>
-                    </svg>
-                </button>
-
-                <a href="/" class="action-btn" style="text-decoration: none;">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                        <polyline points="17 8 12 3 7 8"/>
-                        <line x1="12" y1="3" x2="12" y2="15"/>
-                    </svg>
-                    <span>去转换图片</span>
-                    <svg class="action-arrow" viewBox="0 0 24 24" width="16" height="16">
-                        <polyline points="9 18 15 12 9 6"/>
-                    </svg>
-                </a>
+            <div class="profile-card quick-actions-card">
+                <h4 class="card-subtitle">账户管理</h4>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" onclick="openPasswordModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        <span>修改密码</span>
+                        <svg class="arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </aside>
 
-        <!-- 右侧：历史记录 -->
+        <!-- 右侧主内容 -->
         <div class="profile-main">
-            <div class="profile-card">
+            <!-- 统计概览 -->
+            <div class="profile-card stats-overview">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:rgba(59,130,246,0.12);color:var(--accent);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <path d="M21 15l-5-5L5 21"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statTotal">0</span>
+                            <span class="stat-name">总转换次数</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:rgba(34,197,94,0.12);color:var(--success);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 12h-4l-3 9-4-18-3 9H2"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statPublic">0</span>
+                            <span class="stat-name">本月转换</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:rgba(245,158,11,0.12);color:var(--warning);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statLastWeek">0</span>
+                            <span class="stat-name">近7天</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:rgba(139,92,246,0.12);color:#8b5cf6;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M13 2L3 14h9l-1 8 10-5-10-5z"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statTotalSvg">0</span>
+                            <span class="stat-name">生成 SVG</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 最近转换 -->
+            <div class="profile-card history-section">
                 <div class="history-toolbar">
                     <h3 class="card-title">
-                        <svg viewBox="0 0 24 24">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/>
                             <polyline points="12 6 12 12 16 14"/>
                         </svg>
-                        转换历史
+                        最近转换
                     </h3>
                     <span class="history-count" id="historyCount">0 条记录</span>
                 </div>
@@ -736,14 +149,20 @@
                 </div>
 
                 <div class="empty-state" id="profileHistoryEmpty" hidden>
-                    <svg viewBox="0 0 24 24">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <rect x="3" y="3" width="18" height="18" rx="2"/>
                         <circle cx="8.5" cy="8.5" r="1.5"/>
                         <path d="M21 15l-5-5L5 21"/>
                     </svg>
                     <h3>还没有转换记录</h3>
                     <p>快去上传您的第一张图片吧</p>
-                    <a href="/" class="btn btn-primary btn-sm">去转换</a>
+                    <a href="/convert" class="btn btn-primary btn-sm">去转换</a>
+                </div>
+
+                <div class="history-footer" id="historyFooter" hidden>
+                    <a href="/history" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;">
+                        查看全部历史记录 →
+                    </a>
                 </div>
             </div>
         </div>
@@ -755,14 +174,14 @@
     <div class="modal-box">
         <div class="modal-header">
             <h3>
-                <svg viewBox="0 0 24 24">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                     <path d="M7 11V7a5 5 0 0110 0v4"/>
                 </svg>
                 修改密码
             </h3>
             <button class="modal-close" onclick="closePasswordModal()" type="button">
-                <svg viewBox="0 0 24 24">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"/>
                     <line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -772,15 +191,15 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>当前密码</label>
-                    <input type="password" name="old_password" required placeholder="输入当前密码" autocomplete="current-password">
+                    <input type="password" name="old_password" required placeholder="输入当前密码">
                 </div>
                 <div class="form-group">
                     <label>新密码</label>
-                    <input type="password" name="new_password" required placeholder="至少 4 位" autocomplete="new-password" minlength="4">
+                    <input type="password" name="new_password" required placeholder="至少 4 位" minlength="4">
                 </div>
                 <div class="form-group">
                     <label>确认新密码</label>
-                    <input type="password" name="confirm_password" required placeholder="再次输入新密码" autocomplete="new-password">
+                    <input type="password" name="confirm_password" required placeholder="再次输入新密码">
                 </div>
             </div>
             <div class="modal-footer">
@@ -793,11 +212,8 @@
         </form>
     </div>
 </div>
-
-<!-- Toast 容器 -->
-<div class="toast-container" id="toastContainer"></div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+<script src="{{ url_for('static', filename='js/profile.js') }}?v=5"></script>
 {% endblock %}

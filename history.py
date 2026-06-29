@@ -1,6 +1,8 @@
 ﻿import os
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file
 from flask_login import login_required, current_user
+import io
+import zipfile
 
 history_bp = Blueprint('history', __name__)
 
@@ -16,11 +18,13 @@ def get_history():
     for row in rows:
         history.append({
             'id': row['id'],
-            'filename': row['original_filename'],
+            'filename': row['original_filename'],  # 关键：必须用 filename
             'image_url': f'/api/files/{os.path.basename(row["image_path"])}',
             'created_at': row['created_at']
         })
     return jsonify(history)
+
+# ... 其他接口保持不变
 
 @history_bp.route('/api/history/<int:history_id>', methods=['DELETE'])
 @login_required
@@ -46,6 +50,24 @@ def get_history_svg(history_id):
         return jsonify({'error': '记录不存在'}), 404
     return jsonify({'svg': row['svg_text']})
 
+@history_bp.route('/api/history/<int:history_id>/detail', methods=['GET'])
+@login_required
+def get_history_detail(history_id):
+    db = current_app.get_db()
+    row = db.execute(
+        'SELECT id, original_filename, image_path, svg_text, created_at FROM history WHERE id = ? AND user_id = ?',
+        (history_id, current_user.id)
+    ).fetchone()
+    if not row:
+        return jsonify({'error': '记录不存在'}), 404
+    return jsonify({
+        'id': row['id'],
+        'filename': row['original_filename'],
+        'image_url': f'/api/files/{os.path.basename(row["image_path"])}',
+        'svg_text': row['svg_text'],
+        'created_at': row['created_at']
+    })
+
 @history_bp.route('/api/history/batch', methods=['DELETE'])
 @login_required
 def batch_delete_history():
@@ -55,7 +77,6 @@ def batch_delete_history():
         return jsonify({'error': '未选择记录'}), 400
     
     db = current_app.get_db()
-    # 只删除属于当前用户的记录
     placeholders = ','.join('?' * len(ids))
     rows = db.execute(
         f'SELECT id, image_path FROM history WHERE id IN ({placeholders}) AND user_id = ?',
@@ -71,3 +92,38 @@ def batch_delete_history():
     
     db.commit()
     return jsonify({'message': f'已删除 {deleted} 条记录', 'deleted': deleted})
+
+@history_bp.route('/api/history/export', methods=['POST'])
+@login_required
+def export_history():
+    """导出选中的历史记录为 ZIP"""
+    data = request.get_json()
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'error': '未选择记录'}), 400
+    
+    db = current_app.get_db()
+    placeholders = ','.join('?' * len(ids))
+    rows = db.execute(
+        f'SELECT original_filename, svg_text FROM history WHERE id IN ({placeholders}) AND user_id = ?',
+        (*ids, current_user.id)
+    ).fetchall()
+    
+    if not rows:
+        return jsonify({'error': '没有找到记录'}), 404
+    
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for row in rows:
+            filename = row['original_filename']
+            if not filename.endswith('.svg'):
+                filename = filename.rsplit('.', 1)[0] + '.svg'
+            zf.writestr(filename, row['svg_text'])
+    
+    memory_file.seek(0)
+    return send_file(
+        memory_file,
+        download_name='history_export.zip',
+        as_attachment=True,
+        mimetype='application/zip'
+    )

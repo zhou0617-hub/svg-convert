@@ -74,3 +74,31 @@ def change_password():
                (generate_password_hash(new_password), current_user.id))
     db.commit()
     return jsonify({'message': '密码修改成功'})
+
+# ========== 用户资料 API ==========
+@auth_bp.route('/api/profile', methods=['GET'])
+@login_required
+def get_profile():
+    db = current_app.get_db()
+    row = db.execute('SELECT id, username, nickname, avatar FROM users WHERE id = ?', 
+                     (current_user.id,)).fetchone()
+    return jsonify({
+        'id': row['id'],
+        'username': row['username'],
+        'nickname': row['nickname'] or row['username'],
+        'avatar': row['avatar'] or ''
+    })
+
+@auth_bp.route('/api/profile', methods=['POST'])
+@login_required
+def update_profile():
+    data = request.get_json()
+    nickname = data.get('nickname', '').strip()
+    avatar = data.get('avatar', '')
+    db = current_app.get_db()
+    if nickname:
+        db.execute('UPDATE users SET nickname = ? WHERE id = ?', (nickname, current_user.id))
+    if avatar and avatar.startswith('data:image'):
+        db.execute('UPDATE users SET avatar = ? WHERE id = ?', (avatar, current_user.id))
+    db.commit()
+    return jsonify({'success': True})

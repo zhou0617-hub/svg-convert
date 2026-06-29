@@ -3,21 +3,27 @@
 {% block title %}格式转换 | SVG 转换工坊{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}?v=7">
 {% endblock %}
 
 {% block content %}
-<!-- 简洁标题 -->
 <section class="convert-header">
     <h1>图片转 <span class="gradient-text">SVG</span></h1>
     <p>上传图片，AI 自动转换为高质量矢量图形</p>
 </section>
 
-<!-- 上传区域 -->
+<div class="mode-tabs" id="modeTabs">
+    <button class="mode-tab active" data-mode="single" onclick="switchMode('single')">单图转换</button>
+    <button class="mode-tab" data-mode="batch" onclick="switchMode('batch')">批量转换</button>
+</div>
+
 <section class="upload-section" id="uploadSection">
     <div class="upload-zone" id="uploadZone">
         <input type="file" id="fileInput" accept="image/*" hidden>
-        <div class="upload-content">
+        <input type="file" id="batchFileInput" accept="image/*" multiple hidden>
+
+        <!-- 单图模式内容 -->
+        <div class="upload-content" id="singleContent">
             <div class="upload-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -28,7 +34,23 @@
             <p class="upload-text">拖拽图片到此处，或 <span class="upload-link">点击选择</span></p>
             <p class="upload-hint">支持 PNG、JPG、JPEG、WebP · 最大 10MB</p>
         </div>
-        <div class="upload-preview" id="uploadPreview" hidden>
+
+        <!-- 批量模式内容 -->
+        <div class="upload-content" id="batchContent" style="display:none;">
+            <div class="upload-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="2" y="2" width="8" height="8" rx="1"/>
+                    <rect x="14" y="2" width="8" height="8" rx="1"/>
+                    <rect x="2" y="14" width="8" height="8" rx="1"/>
+                    <rect x="14" y="14" width="8" height="8" rx="1"/>
+                </svg>
+            </div>
+            <p class="upload-text">拖拽多张图片到此处，或 <span class="upload-link">点击选择</span></p>
+            <p class="upload-hint">最多 20 张 · 单张最大 10MB</p>
+        </div>
+
+        <!-- 预览区域（单图） -->
+        <div class="upload-preview" id="uploadPreview">
             <img id="previewImg" src="" alt="预览">
             <div class="upload-overlay">
                 <button class="btn btn-primary" id="convertBtn" onclick="startConvert()">
@@ -38,30 +60,39 @@
                 <button class="btn btn-ghost btn-sm" onclick="resetUpload()">重新选择</button>
             </div>
         </div>
+
+        <!-- 批量文件列表 -->
+        <div class="batch-file-list" id="batchFileList"></div>
+        <div class="batch-actions" id="batchActions">
+            <button class="btn btn-primary" onclick="startBatchConvert()">
+                <span class="btn-text">开始批量转换</span>
+                <span class="spinner" hidden></span>
+            </button>
+            <button class="btn btn-ghost" onclick="resetUpload()">清空列表</button>
+        </div>
     </div>
 </section>
 
-<!-- 转换结果 -->
+<!-- 进度条 -->
+<div class="progress-container" id="progressContainer">
+    <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-info">
+        <span class="progress-status" id="progressStatus">准备中...</span>
+        <span class="progress-percent" id="progressPercent">0%</span>
+    </div>
+    <div class="progress-steps"></div>
+</div>
+
+<!-- 单图结果 -->
 <section class="result-section" id="resultSection" hidden>
     <div class="result-card">
         <div class="result-header">
             <h3>转换结果</h3>
             <div class="result-actions">
-                <button class="btn btn-ghost btn-sm" onclick="copySvg()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                        <rect x="9" y="9" width="13" height="13" rx="2"/>
-                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-                    </svg>
-                    复制 SVG
-                </button>
-                <button class="btn btn-ghost btn-sm" onclick="downloadSvg()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    下载
-                </button>
+                <button class="btn btn-ghost btn-sm" onclick="copySvg()">复制 SVG</button>
+                <button class="btn btn-ghost btn-sm" onclick="downloadSvg()">下载</button>
             </div>
         </div>
         <div class="result-body">
@@ -70,6 +101,12 @@
                     <span class="compare-label">原图</span>
                     <div class="compare-img-wrapper">
                         <img id="resultOriginal" src="" alt="原图">
+                        <div class="zoom-controls">
+                            <button class="zoom-btn" onclick="zoomImage('original', -0.2)">−</button>
+                            <span class="zoom-level" id="zoomOriginal">100%</span>
+                            <button class="zoom-btn" onclick="zoomImage('original', 0.2)">+</button>
+                            <button class="zoom-btn" onclick="resetZoom('original')">⟲</button>
+                        </div>
                     </div>
                 </div>
                 <div class="compare-divider">
@@ -79,41 +116,55 @@
                 </div>
                 <div class="compare-item">
                     <span class="compare-label">SVG 矢量图</span>
-                    <div class="compare-img-wrapper" id="svgWrapper"></div>
+                    <div class="compare-img-wrapper">
+                        <div id="svgDisplay"></div>
+                        <div class="zoom-controls">
+                            <button class="zoom-btn" onclick="zoomImage('svg', -0.2)">−</button>
+                            <span class="zoom-level" id="zoomSvg">100%</span>
+                            <button class="zoom-btn" onclick="zoomImage('svg', 0.2)">+</button>
+                            <button class="zoom-btn" onclick="resetZoom('svg')">⟲</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- 功能特色 -->
+<!-- 批量结果 -->
+<section class="result-section" id="batchResultSection" hidden>
+    <div class="result-card">
+        <div class="result-header">
+            <h3>批量转换结果</h3>
+            <div class="result-actions">
+                <button class="btn btn-primary btn-sm" onclick="downloadBatchZip()">📦 全部下载</button>
+            </div>
+        </div>
+        <div class="result-body">
+            <div class="batch-result-summary" id="batchSummary">
+                <div class="batch-result-stat total"><span class="num" id="batchTotal">0</span><span class="label">总计</span></div>
+                <div class="batch-result-stat success"><span class="num" id="batchSuccess">0</span><span class="label">成功</span></div>
+                <div class="batch-result-stat failed"><span class="num" id="batchFailed">0</span><span class="label">失败</span></div>
+            </div>
+            <div class="batch-result-items" id="batchResultItems"></div>
+        </div>
+    </div>
+</section>
+
 <section class="features-section">
     <div class="features-grid">
         <div class="feature-card">
-            <div class="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M13 2L3 14h9l-1 8 10-5-10-5z"/>
-                </svg>
-            </div>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-5-10-5z"/></svg></div>
             <h3>极速转换</h3>
             <p>基于 AI 算法，秒级完成图片到 SVG 的转换</p>
         </div>
         <div class="feature-card">
-            <div class="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                </svg>
-            </div>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
             <h3>高质量输出</h3>
             <p>智能路径优化，生成干净、可缩放的矢量图形</p>
         </div>
         <div class="feature-card">
-            <div class="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0110 0v4"/>
-                </svg>
-            </div>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
             <h3>隐私安全</h3>
             <p>所有文件本地处理，不上传至第三方服务器</p>
         </div>
@@ -122,5 +173,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/index.js') }}"></script>
+<script src="{{ url_for('static', filename='js/index.js') }}?v=7"></script>
 {% endblock %}

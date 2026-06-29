@@ -1,43 +1,76 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for
+﻿from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User
+import sqlite3
 
 auth_bp = Blueprint('auth', __name__)
 
-@auth_bp.route('/register', methods=['POST'])
+@auth_bp.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
-    if not data or 'username' not in data or 'password' not in data:
-        return jsonify({'error': 'Missing username or password'}), 400
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'error': 'Username already exists'}), 400
-    user = User(
-        username=data['username'],
-        password_hash=generate_password_hash(data['password'])
-    )
-    db.session.add(user)
-    db.session.commit()
-    login_user(user)
-    return jsonify({'message': 'Registered successfully', 'username': user.username})
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
+    if not username or not password:
+        return jsonify({'error': '用户名和密码不能为空'}), 400
+    if len(password) < 4:
+        return jsonify({'error': '密码至少4位'}), 400
 
-@auth_bp.route('/login', methods=['POST'])
+    db = current_app.get_db()
+    try:
+        db.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)',
+                   (username, generate_password_hash(password)))
+        db.commit()
+        return jsonify({'message': '注册成功'})
+    except sqlite3.IntegrityError:
+        return jsonify({'error': '用户名已存在'}), 409
+
+@auth_bp.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
-    user = User.query.filter_by(username=data.get('username')).first()
-    if user and check_password_hash(user.password_hash, data.get('password')):
-        login_user(user)
-        return jsonify({'message': 'Logged in', 'username': user.username})
-    return jsonify({'error': 'Invalid credentials'}), 401
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
+    db = current_app.get_db()
+    row = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    if not row or not check_password_hash(row['password_hash'], password):
+        return jsonify({'error': '用户名或密码错误'}), 401
+    user = current_app.User(row['id'], row['username'])
+    login_user(user, remember=True)
+    return jsonify({'message': '登录成功', 'username': user.username})
 
-@auth_bp.route('/logout')
+@auth_bp.route('/api/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
-    return jsonify({'message': 'Logged out'})
+    return jsonify({'message': '已登出'})
 
-@auth_bp.route('/me')
-def me():
+@auth_bp.route('/api/current_user', methods=['GET'])
+def current_user_info():
     if current_user.is_authenticated:
-        return jsonify({'username': current_user.username})
-    return jsonify({'username': None})
+        return jsonify({
+            'logged_in': True, 
+            'username': current_user.username,
+            'user_id': current_user.id
+        })
+    return jsonify({'logged_in': False})
+
+@auth_bp.route('/api/change_password', methods=['POST'])
+@login_required
+def change_password():
+    data = request.get_json()
+    old_password = data.get('old_password', '')
+    new_password = data.get('new_password', '')
+    
+    if len(new_password) < 4:
+        return jsonify({'error': '新密码至少4位'}), 400
+    
+    db = current_app.get_db()
+    row = db.execute('SELECT password_hash FROM users WHERE id = ?', 
+                     (current_user.id,)).fetchone()
+    
+    if not check_password_hash(row['password_hash'], old_password):
+        return jsonify({'error': '当前密码错误'}), 401
+    
+    db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+               (generate_password_hash(new_password), current_user.id))
+    db.commit()
+    return jsonify({'message': '密码修改成功'})

@@ -1,182 +1,134 @@
-import os, uuid, traceback
-from flask import Flask, render_template, request, jsonify, send_from_directory
-from flask_login import LoginManager, login_required, current_user
-from models import db, User, Asset
-from config import SQLALCHEMY_DATABASE_URI, UPLOAD_FOLDER, MAX_CONTENT_LENGTH, SECRET_KEY
-from vectorize import convert_to_svg
-from text2svg import parse_text_to_svg
-from ai_generate import text_to_vector_svg
-from scene_composer import parse_scene_description, layout_objects
-from auth import auth_bp
-from share import share_bp
+﻿import os
+import sqlite3
+from flask import Flask, render_template, g, redirect, url_for
+from flask_login import LoginManager, UserMixin, current_user
 
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
-app.config['SECRET_KEY'] = SECRET_KEY
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+def create_app():
+    app = Flask(__name__)
+    app.config['SECRET_KEY'] = 'change-me-in-production'
+    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+    app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
+    app.config['DATABASE'] = os.path.join(os.getcwd(), 'data.db')
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-db.init_app(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = None  # API模式
+    app.template_folder = os.path.join(os.path.dirname(__file__), 'templates')
+    app.static_folder = os.path.join(os.path.dirname(__file__), 'static')
 
-@login_manager.user_loader
-def load_user(user_id):
-    return db.session.get(User, int(user_id))
+    init_db(app.config['DATABASE'])
 
-app.register_blueprint(auth_bp, url_prefix='/auth')
-app.register_blueprint(share_bp, url_prefix='/share')
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = None
 
-with app.app_context():
-    db.create_all()
+    def get_db():
+        if 'db' not in g:
+            g.db = sqlite3.connect(app.config['DATABASE'])
+            g.db.row_factory = sqlite3.Row
+        return g.db
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+    @app.teardown_appcontext
+    def close_db(exception):
+        db = g.pop('db', None)
+        if db is not None:
+            db.close()
 
-@app.route('/upload', methods=['POST'])
-@login_required
-def upload():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp']:
-        return jsonify({'error': 'Unsupported file type'}), 400
-    unique_name = str(uuid.uuid4()) + ext
-    file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_name))
-    asset = Asset(filename=unique_name, original_name=file.filename, user_id=current_user.id)
-    db.session.add(asset)
-    db.session.commit()
-    return jsonify(asset.to_dict()), 201
+    class User(UserMixin):
+        def __init__(self, id, username):
+            self.id = id
+            self.username = username
 
-@app.route('/vectorize', methods=['POST'])
-@login_required
-def vectorize():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    style = request.form.get('style', 'default')  # 已无实际作用
-    temp_input = os.path.join(app.config['UPLOAD_FOLDER'], f'input_{uuid.uuid4().hex}.png')
-    try:
-        file.save(temp_input)
-        svg_data = convert_to_svg(temp_input)  # 只用防污染模式
-        unique_name = str(uuid.uuid4()) + '.svg'
-        svg_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
-        with open(svg_path, 'w', encoding='utf-8') as f:
-            f.write(svg_data)
-        asset = Asset(filename=unique_name, original_name=f'vectorized_{os.path.splitext(file.filename)[0]}.svg', user_id=current_user.id)
-        db.session.add(asset)
-        db.session.commit()
-        return jsonify(asset.to_dict()), 201
-    except Exception as e:
-        print("===== 矢量化错误 =====")
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if os.path.exists(temp_input):
-            os.remove(temp_input)
+    @login_manager.user_loader
+    def load_user(user_id):
+        db = get_db()
+        row = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        if row:
+            return User(row['id'], row['username'])
+        return None
 
-@app.route('/text2svg', methods=['POST'])
-@login_required
-def text2svg():
-    data = request.get_json()
-    if not data or 'text' not in data:
-        return jsonify({'error': 'Missing text field'}), 400
-    text = data['text'].strip()
-    if not text:
-        return jsonify({'error': 'Empty text'}), 400
-    # 简单规则生成
-    svg_str = parse_text_to_svg(text)
-    unique_name = str(uuid.uuid4()) + '.svg'
-    svg_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
-    with open(svg_path, 'w', encoding='utf-8') as f:
-        f.write(svg_str)
-    asset = Asset(filename=unique_name, original_name='text_generated.svg', user_id=current_user.id)
-    db.session.add(asset)
-    db.session.commit()
-    return jsonify(asset.to_dict()), 201
+    app.get_db = get_db
+    app.User = User
 
-@app.route('/ai_text2svg', methods=['POST'])
-@login_required
-def ai_text2svg():
-    """AI文本生成矢量（需要 HuggingFace Token）"""
-    data = request.get_json()
-    if not data or 'prompt' not in data:
-        return jsonify({'error': 'Missing prompt'}), 400
-    prompt = data['prompt'].strip()
-    if not prompt:
-        return jsonify({'error': 'Empty prompt'}), 400
-    style = data.get('style', 'artistic')
-    try:
-        svg_str = text_to_vector_svg(prompt, style)
-    except Exception as e:
-        return jsonify({'error': f'AI generation failed: {str(e)}'}), 500
-    unique_name = str(uuid.uuid4()) + '.svg'
-    svg_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
-    with open(svg_path, 'w', encoding='utf-8') as f:
-        f.write(svg_str)
-    asset = Asset(filename=unique_name, original_name=f'ai_{prompt[:20]}.svg', user_id=current_user.id)
-    db.session.add(asset)
-    db.session.commit()
-    return jsonify(asset.to_dict()), 201
+    # 注册蓝图
+    from auth import auth_bp
+    from convert import convert_bp
+    from history import history_bp
+    from files import files_bp
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(convert_bp)
+    app.register_blueprint(history_bp)
+    app.register_blueprint(files_bp)
 
-@app.route('/scene_compose', methods=['POST'])
-@login_required
-def scene_compose():
-    data = request.get_json()
-    if not data or 'description' not in data:
-        return jsonify({'error': 'Missing description'}), 400
-    description = data['description']
-    # 解析描述
-    objects = parse_scene_description(description)
-    # 从当前用户的资产中匹配名称（简单字符串包含）
-    user_assets = Asset.query.filter_by(user_id=current_user.id).all()
-    matched = []
-    for obj in objects:
-        for asset in user_assets:
-            if obj['name'].lower() in asset.original_name.lower():
-                matched.append({'asset': asset, 'position': obj['position']})
-                break
-    if not matched:
-        return jsonify({'error': 'No matching assets found in your library. Try uploading some SVGs first.'}), 400
-    # 布局
-    layout = layout_objects(matched, 800, 600)
-    # 合成 SVG
-    svg_parts = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">']
-    for i, item in enumerate(matched):
-        with open(os.path.join(app.config['UPLOAD_FOLDER'], item['asset'].filename), 'r') as f:
-            svg_content = f.read()
-            # 简化处理：直接嵌套，实际应提取根元素并添加 transform
-            x = layout[i]['x']
-            y = layout[i]['y']
-            svg_parts.append(f'<g transform="translate({x-50},{y-50}) scale(0.5)">{svg_content}</g>')
-    svg_parts.append('</svg>')
-    composed_svg = '\n'.join(svg_parts)
-    unique_name = str(uuid.uuid4()) + '.svg'
-    svg_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
-    with open(svg_path, 'w', encoding='utf-8') as f:
-        f.write(composed_svg)
-    asset = Asset(filename=unique_name, original_name=f'scene_{description[:20]}.svg', user_id=current_user.id)
-    db.session.add(asset)
-    db.session.commit()
-    return jsonify(asset.to_dict()), 201
+    # ========== 页面路由 ==========
+    
+    # 根路径：未登录→登录页，已登录→格式转换
+    @app.route('/')
+    def index():
+        if current_user.is_authenticated:
+            return redirect(url_for('convert_page'))
+        return render_template('login.html')
 
-@app.route('/assets', methods=['GET'])
-@login_required
-def get_assets():
-    assets = Asset.query.filter_by(user_id=current_user.id).order_by(Asset.upload_time.desc()).all()
-    return jsonify([a.to_dict() for a in assets])
+    # 格式转换页面（原首页）
+    @app.route('/convert')
+    def convert_page():
+        if not current_user.is_authenticated:
+            return redirect(url_for('index'))
+        return render_template('index.html', active_page='index')
 
-@app.route('/svg/<filename>')
-def get_svg(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    @app.route('/history')
+    def history_page():
+        if not current_user.is_authenticated:
+            return redirect(url_for('index'))
+        return render_template('history.html', active_page='history')
+
+    @app.route('/community')
+    def community_page():
+        # 社区可以公开访问，但登录后显示不同
+        return render_template('community.html', active_page='community')
+
+    @app.route('/profile')
+    def profile_page():
+        if not current_user.is_authenticated:
+            return redirect(url_for('index'))
+        return render_template('profile.html', active_page='profile')
+
+    @app.route('/login')
+    def login_page():
+        if current_user.is_authenticated:
+            return redirect(url_for('convert_page'))
+        return render_template('login.html')
+
+    # 注册页
+    @app.route('/register')
+    def register():
+        if current_user.is_authenticated:
+            return redirect(url_for('convert_page'))
+        return render_template('register.html')
+
+    return app
+
+def init_db(db_path):
+    db = sqlite3.connect(db_path)
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+    ''')
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            original_filename TEXT NOT NULL,
+            image_path TEXT NOT NULL,
+            svg_text TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    ''')
+    db.commit()
+    db.close()
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app = create_app()
+    app.run(debug=False, host='0.0.0.0', port=5000)

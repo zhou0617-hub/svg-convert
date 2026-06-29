@@ -1,0 +1,70 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SVG 转换工坊{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- 粒子背景 -->
+    <div class="particles" id="particles"></div>
+
+    <!-- 顶部导航 -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="/convert" class="nav-brand">
+                <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                <span>SVG 转换工坊</span>
+            </a>
+            <div class="nav-links">
+                <a href="/convert" class="nav-link {% if active_page == 'index' %}active{% endif %}">格式转换</a>
+                <a href="/history" class="nav-link {% if active_page == 'history' %}active{% endif %}">历史记录</a>
+                <a href="/community" class="nav-link {% if active_page == 'community' %}active{% endif %}">浏览社区</a>
+            </div>
+        </div>
+        <div class="nav-right" id="navUser">
+            <!-- 由 JS 动态填充：未登录显示登录按钮，已登录显示头像下拉 -->
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="main-container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <p>SVG 转换工坊 · 让每一张图片都成为矢量艺术</p>
+    </footer>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- SVG 预览弹窗 -->
+    <div class="modal modal-lg" id="svgModal">
+        <div class="modal-backdrop" onclick="hideModal('svgModal')"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="svgModalTitle">SVG 详情</h3>
+                <button class="modal-close" onclick="hideModal('svgModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="svg-preview-large" id="svgPreviewLarge"></div>
+                <textarea class="svg-code" id="svgCode" readonly></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/base.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

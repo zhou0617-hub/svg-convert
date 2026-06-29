@@ -1,0 +1,290 @@
+/* ==================== 历史记录页面 ==================== */
+
+/* 页面标题 */
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.header-left h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 6px;
+    background: linear-gradient(135deg, #818cf8, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.header-left p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* 批量操作栏 */
+.batch-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.batch-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.batch-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.batch-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.batch-count {
+    font-size: 0.875rem;
+    color: var(--accent-light);
+    font-weight: 500;
+}
+
+/* 历史记录网格 */
+.history-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+/* 历史卡片 */
+.history-card {
+    position: relative;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: var(--transition);
+}
+
+.history-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.history-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+/* 卡片选择框 */
+.card-select {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.history-card:hover .card-select,
+.history-card.selected .card-select {
+    opacity: 1;
+}
+
+/* 图片区域 */
+.card-image {
+    aspect-ratio: 4/3;
+    overflow: hidden;
+    background: var(--bg-primary);
+    position: relative;
+    cursor: pointer;
+}
+
+.card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+
+.history-card:hover .card-image img {
+    transform: scale(1.05);
+}
+
+/* 图片悬停遮罩 */
+.card-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 10, 15, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.history-card:hover .card-overlay {
+    opacity: 1;
+}
+
+.card-overlay .btn {
+    font-size: 0.75rem;
+    padding: 6px 14px;
+}
+
+/* 卡片信息 */
+.card-info {
+    padding: 12px;
+}
+
+.card-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0 0 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.card-name:hover {
+    color: var(--accent-light);
+}
+
+.card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* 卡片操作按钮 */
+.card-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.card-action-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+
+.card-action-btn:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.card-action-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
+}
+
+/* 加载状态 */
+.loading-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    color: var(--text-muted);
+    gap: 16px;
+}
+
+.loading-state .spinner {
+    border-color: rgba(99, 102, 241, 0.2);
+    border-top-color: var(--accent);
+}
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    padding: 100px 20px;
+    color: var(--text-muted);
+}
+
+.empty-state svg {
+    margin-bottom: 20px;
+    opacity: 0.3;
+}
+
+.empty-state h3 {
+    font-size: 1.125rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.empty-state p {
+    font-size: 0.875rem;
+    margin-bottom: 20px;
+}
+
+/* 弹窗操作按钮 */
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .history-header {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .history-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .card-select {
+        opacity: 1;
+    }
+}
+
+@media (max-width: 480px) {
+    .history-grid {
+        grid-template-columns: 1fr;
+    }
+}

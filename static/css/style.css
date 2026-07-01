@@ -1,0 +1,244 @@
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #f5f7fa;
+    color: #333;
+    padding: 30px 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.page-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+/* 上传区 */
+.upload-box {
+    border: 2px dashed #d0d7de;
+    border-radius: 8px;
+    background: #fff;
+    padding: 50px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.upload-box:hover,
+.upload-box.drag-over {
+    border-color: #1677ff;
+    background: #f0f7ff;
+}
+
+.upload-inner p:first-child {
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.link-btn {
+    color: #1677ff;
+    cursor: pointer;
+}
+
+.tip {
+    font-size: 13px;
+    color: #8c8c8c;
+}
+
+/* 进度条 */
+.progress-box {
+    background: #fff;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.progress-bar {
+    height: 6px;
+    background: #f0f0f0;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0;
+    background: #1677ff;
+    transition: width 0.3s;
+}
+
+.progress-box p {
+    font-size: 13px;
+    color: #666;
+    text-align: center;
+}
+
+/* 结果区 */
+.result-box {
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    padding: 20px;
+}
+
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.result-title {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.result-btns {
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-family: inherit;
+}
+
+.btn-primary {
+    background: #1677ff;
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background: #4096ff;
+}
+
+.btn-outline {
+    background: #fff;
+    border-color: #d9d9d9;
+    color: #333;
+}
+
+.btn-outline:hover {
+    border-color: #1677ff;
+    color: #1677ff;
+}
+
+/* 对比区域 */
+.compare-wrap {
+    display: grid;
+    grid-template-columns: 1fr 40px 1fr;
+    gap: 16px;
+    align-items: center;
+}
+
+.image-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.panel-label {
+    font-size: 14px;
+    color: #8c8c8c;
+    text-align: center;
+}
+
+.zoom-container {
+    width: 100%;
+    height: 450px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    cursor: grab;
+    background: #fafafa;
+}
+
+.zoom-container:active {
+    cursor: grabbing;
+}
+
+.zoom-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+    user-select: none;
+}
+
+.zoom-content img,
+.zoom-content svg {
+    display: block;
+    pointer-events: none;
+}
+
+.zoom-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}
+
+.zoom-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #d9d9d9;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.zoom-btn:hover {
+    border-color: #1677ff;
+    color: #1677ff;
+}
+
+.zoom-percent {
+    min-width: 50px;
+    text-align: center;
+    font-size: 13px;
+    color: #666;
+}
+
+.arrow {
+    text-align: center;
+    font-size: 20px;
+    color: #bfbfbf;
+}
+
+.reupload-wrap {
+    text-align: center;
+    margin-top: 20px;
+}
+
+@media (max-width: 768px) {
+    .compare-wrap {
+        grid-template-columns: 1fr;
+    }
+    .arrow {
+        transform: rotate(90deg);
+    }
+    .zoom-container {
+        height: 350px;
+    }
+}

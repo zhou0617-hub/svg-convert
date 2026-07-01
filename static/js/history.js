@@ -316,9 +316,3 @@ function formatDate(dateStr) {
     if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
     return d.toLocaleDateString('zh-CN');
 }
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}

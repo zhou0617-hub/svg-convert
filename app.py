@@ -57,6 +57,8 @@ def create_app():
     app.register_blueprint(convert_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(files_bp)
+    from enhance_advanced import enhance_advanced_bp
+    app.register_blueprint(enhance_advanced_bp)
 
     # ========== 页面路由 ==========
     

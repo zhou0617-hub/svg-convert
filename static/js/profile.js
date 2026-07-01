@@ -5,35 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadProfileHistory();
 });
 
-// ==================== 工具函数 ====================
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function formatDate(iso) {
-    if (!iso) return '—';
-    try {
-        const d = new Date(iso);
-        return d.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    } catch {
-        return '—';
-    }
-}
-
-function setLoading(btn, isLoading) {
-    if (!btn) return;
-    if (isLoading) {
-        btn.classList.add('loading');
-        btn.disabled = true;
-    } else {
-        btn.classList.remove('loading');
-        btn.disabled = false;
-    }
-}
-
 // ==================== 加载用户信息 ====================
 async function loadProfileInfo() {
     try {

@@ -2,3 +2,10 @@
 flask-login
 vtracer
 Pillow
+opencv-python
+numpy
+scipy
+scikit-image
+pywavelets
+svgpathtools
+lxml

@@ -15,12 +15,60 @@
 <div class="mode-tabs" id="modeTabs">
     <button class="mode-tab active" data-mode="single" onclick="switchMode('single')">单图转换</button>
     <button class="mode-tab" data-mode="batch" onclick="switchMode('batch')">批量转换</button>
+    <button class="mode-tab" data-mode="enhance" onclick="switchMode('enhance')">图像增强</button>
+    <button class="mode-tab" data-mode="batchEnhance" onclick="switchMode('batchEnhance')">批量增强</button>
+</div>
+
+<!-- 参数控制面板 -->
+<div class="param-panel">
+  <div class="panel-header">
+    <button id="toggleParam">高级参数设置</button>
+  </div>
+
+  <div class="param-grid">
+    <!-- 原有滑块全部保留 -->
+    <div class="param-item">
+      <label>图像放大倍率</label>
+      <input type="range" id="enhanceScale" min="1" max="3" step="0.1" value="1.8">
+      <span class="val" id="scaleVal">1.8</span>
+    </div>
+    <div class="param-item">
+      <label>杂点过滤</label>
+      <input type="range" id="speckle" min="1" max="15" value="6">
+      <span class="val" id="speckleVal">6</span>
+    </div>
+    <div class="param-item">
+      <label>色彩精度</label>
+      <input type="range" id="colorPrec" min="2" max="12" value="8">
+      <span class="val" id="colorPrecVal">8</span>
+    </div>
+    <div class="param-item">
+      <label>分层差值</label>
+      <input type="range" id="layerDiff" min="2" max="20" value="12">
+      <span class="val" id="layerDiffVal">12</span>
+    </div>
+    <div class="param-item">
+      <label>路径平滑度</label>
+      <input type="range" id="pathTol" min="0.5" max="5" step="0.1" value="3">
+      <span class="val" id="pathTolVal">3.0</span>
+    </div>
+    <div class="param-checkbox">
+      <input type="checkbox" id="enableSegment" checked>
+      <label for="enableSegment">开启语义分层</label>
+    </div>
+    <div class="param-checkbox">
+      <input type="checkbox" id="enableGradient">
+      <label for="enableGradient">自动渐变</label>
+    </div>
+  </div>
 </div>
 
 <section class="upload-section" id="uploadSection">
     <div class="upload-zone" id="uploadZone">
         <input type="file" id="fileInput" accept="image/*" hidden>
         <input type="file" id="batchFileInput" accept="image/*" multiple hidden>
+        <input type="file" id="enhanceFileInput" accept="image/*" hidden>
+        <input type="file" id="batchEnhanceFileInput" accept="image/*" multiple hidden>
 
         <!-- 单图模式内容 -->
         <div class="upload-content" id="singleContent">
@@ -49,7 +97,33 @@
             <p class="upload-hint">最多 20 张 · 单张最大 10MB</p>
         </div>
 
-        <!-- 预览区域（单图） -->
+        <!-- 图像增强模式内容 -->
+        <div class="upload-content" id="enhanceContent" style="display:none;">
+            <div class="upload-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+            </div>
+            <p class="upload-text">拖拽图片到此处，或 <span class="upload-link">点击选择</span></p>
+            <p class="upload-hint">AI 智能去噪、锐化、颜色量化、超分辨率 · 支持 PNG、JPG · 最大 10MB</p>
+        </div>
+
+        <!-- 批量增强模式内容 -->
+        <div class="upload-content" id="batchEnhanceContent" style="display:none;">
+            <div class="upload-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M17 3l4 4"/>
+                    <path d="M21 3l-4 4"/>
+                </svg>
+            </div>
+            <p class="upload-text">拖拽多张图片到此处，或 <span class="upload-link">点击选择</span></p>
+            <p class="upload-hint">AI 批量智能增强 · 最多 10 张 · 单张最大 10MB</p>
+        </div>
+
+        <!-- 预览区域（单图/增强共用） -->
         <div class="upload-preview" id="uploadPreview">
             <img id="previewImg" src="" alt="预览">
             <div class="upload-overlay">
@@ -64,7 +138,7 @@
         <!-- 批量文件列表 -->
         <div class="batch-file-list" id="batchFileList"></div>
         <div class="batch-actions" id="batchActions">
-            <button class="btn btn-primary" onclick="startBatchConvert()">
+            <button class="btn btn-primary" id="batchActionBtn" onclick="startBatchConvert()">
                 <span class="btn-text">开始批量转换</span>
                 <span class="spinner" hidden></span>
             </button>
@@ -147,6 +221,72 @@
                 <div class="batch-result-stat failed"><span class="num" id="batchFailed">0</span><span class="label">失败</span></div>
             </div>
             <div class="batch-result-items" id="batchResultItems"></div>
+        </div>
+    </div>
+</section>
+
+<!-- 单图增强结果 -->
+<section class="result-section" id="enhanceResultSection" hidden>
+    <div class="result-card">
+        <div class="result-header">
+            <h3>图像增强结果</h3>
+            <div class="result-actions">
+                <button class="btn btn-ghost btn-sm" onclick="downloadEnhancedImage()">💾 保存修复图</button>
+                <button class="btn btn-primary btn-sm" onclick="convertEnhancedToSvg()">➡️ 转为 SVG</button>
+            </div>
+        </div>
+        <div class="result-body">
+            <div class="compare-view">
+                <div class="compare-item">
+                    <span class="compare-label">原图（模糊/噪点）</span>
+                    <div class="compare-img-wrapper">
+                        <img id="enhanceOriginal" src="" alt="原图">
+                        <div class="zoom-controls">
+                            <button class="zoom-btn" onclick="zoomEnhanceImage('original', -0.2)">−</button>
+                            <span class="zoom-level" id="zoomEnhanceOriginal">100%</span>
+                            <button class="zoom-btn" onclick="zoomEnhanceImage('original', 0.2)">+</button>
+                            <button class="zoom-btn" onclick="resetEnhanceZoom('original')">⟲</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="compare-divider">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </div>
+                <div class="compare-item">
+                    <span class="compare-label">增强后（清晰/降噪）</span>
+                    <div class="compare-img-wrapper">
+                        <img id="enhanceResult" src="" alt="增强后">
+                        <div class="zoom-controls">
+                            <button class="zoom-btn" onclick="zoomEnhanceImage('result', -0.2)">−</button>
+                            <span class="zoom-level" id="zoomEnhanceResult">100%</span>
+                            <button class="zoom-btn" onclick="zoomEnhanceImage('result', 0.2)">+</button>
+                            <button class="zoom-btn" onclick="resetEnhanceZoom('result')">⟲</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 批量增强结果 -->
+<section class="result-section" id="batchEnhanceResultSection" hidden>
+    <div class="result-card">
+        <div class="result-header">
+            <h3>批量增强结果</h3>
+            <div class="result-actions">
+                <button class="btn btn-primary btn-sm" onclick="downloadBatchEnhancedZip()">📦 全部下载</button>
+            </div>
+        </div>
+        <div class="result-body">
+            <div class="batch-result-summary" id="batchEnhanceSummary">
+                <div class="batch-result-stat total"><span class="num" id="batchEnhanceTotal">0</span><span class="label">总计</span></div>
+                <div class="batch-result-stat success"><span class="num" id="batchEnhanceSuccess">0</span><span class="label">成功</span></div>
+                <div class="batch-result-stat failed"><span class="num" id="batchEnhanceFailed">0</span><span class="label">失败</span></div>
+            </div>
+            <div class="batch-result-items" id="batchEnhanceResultItems"></div>
         </div>
     </div>
 </section>

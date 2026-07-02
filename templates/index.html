@@ -1,0 +1,390 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片一键转SVG - 高清无损矢量化</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/index.css">
+</head>
+<body>
+    <!-- 粒子背景 -->
+    <div class="particles" id="particles"></div>
+
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="/" class="nav-brand">
+                <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                <span>SVG 转换工具</span>
+            </a>
+            <div class="nav-links">
+                <a href="/convert" class="nav-link active">格式转换</a>
+                <a href="/history" class="nav-link">历史记录</a>
+                <a href="/community" class="nav-link">社区广场</a>
+            </div>
+        </div>
+        <div class="nav-right" id="navUser">
+            <!-- 动态渲染用户菜单 -->
+        </div>
+    </nav>
+
+    <!-- 主容器 -->
+    <div class="main-container">
+        <div class="convert-header fade-in">
+            <h1>图片 <span class="gradient-text">一键转 SVG</span></h1>
+            <p>支持批量转换，高清无损矢量化，保留原图色彩与细节</p>
+        </div>
+
+        <!-- 模式切换标签 -->
+        <div class="mode-tabs fade-in">
+            <button class="mode-tab active" data-mode="single" onclick="switchMode('single')">单图转换</button>
+            <button class="mode-tab" data-mode="batch" onclick="switchMode('batch')">批量转换</button>
+            <button class="mode-tab" data-mode="enhance_single" onclick="switchMode('enhance_single')">单图增强</button>
+            <button class="mode-tab" data-mode="enhance_batch" onclick="switchMode('enhance_batch')">批量增强</button>
+        </div>
+
+        <!-- 上传区域（统一虚线卡片） -->
+        <div class="upload-section fade-in">
+            <div class="upload-zone" id="uploadZone">
+                <!-- 1. 单图转换上传提示 -->
+                <div id="singleContent">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </div>
+                    <div class="upload-text">拖拽图片到此处，或 <span class="upload-link">点击选择</span></div>
+                    <p class="upload-hint">支持 JPG、PNG 格式，单张不超过 10MB</p>
+                </div>
+
+                <!-- 2. 批量转换上传提示 -->
+                <div id="batchContent" style="display: none;">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </div>
+                    <div class="upload-text">拖拽多张图片到此处，或 <span class="upload-link">点击选择</span></div>
+                    <p class="upload-hint">支持 JPG、PNG 格式，单次最多 20 张，单张不超过 10MB</p>
+                </div>
+
+                <!-- 3. 单图增强上传提示 -->
+                <div id="enhanceSingleContent" style="display: none;">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </div>
+                    <div class="upload-text">拖拽图片到此处，或 <span class="upload-link">点击选择</span></div>
+                    <p class="upload-hint">支持 JPG、PNG 格式，单张不超过 10MB</p>
+                </div>
+
+                <!-- 4. 批量增强上传提示 -->
+                <div id="enhanceBatchContent" style="display: none;">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </div>
+                    <div class="upload-text">拖拽多张图片到此处，或 <span class="upload-link">点击选择</span></div>
+                    <p class="upload-hint">支持 JPG、PNG 格式，单次最多 20 张，单张不超过 10MB</p>
+                </div>
+
+                <!-- 单图转换预览 -->
+                <div class="upload-preview" id="uploadPreview">
+                    <img id="previewImg" alt="预览图">
+                    <div class="upload-overlay">
+                        <button class="btn btn-primary" id="convertBtn" onclick="startConvert()">
+                            <span class="btn-text">开始转换</span>
+                            <div class="spinner" hidden></div>
+                        </button>
+                        <button class="btn btn-ghost" onclick="resetUpload()">重新上传</button>
+                    </div>
+                </div>
+
+                <!-- 批量转换文件列表 -->
+                <div class="batch-file-list" id="batchFileList"></div>
+                <div class="batch-actions" id="batchActions">
+                    <button class="btn btn-primary" onclick="startBatchConvert()">
+                        <span class="btn-text">批量转换</span>
+                        <div class="spinner" hidden></div>
+                    </button>
+                    <button class="btn btn-ghost" onclick="resetUpload()">清空列表</button>
+                </div>
+
+                <!-- 单图增强预览 -->
+                <div class="upload-preview" id="enhanceUploadPreview">
+                    <img id="enhancePreviewImg" alt="预览图">
+                    <div class="upload-overlay">
+                        <button class="btn btn-primary" id="enhanceBtn" onclick="startEnhanceSingle()">
+                            <span class="btn-text">开始增强</span>
+                            <div class="spinner" hidden></div>
+                        </button>
+                        <button class="btn btn-ghost" onclick="resetEnhanceUpload()">重新上传</button>
+                    </div>
+                </div>
+
+                <!-- 批量增强文件列表 -->
+                <div class="batch-file-list" id="enhanceBatchFileList"></div>
+                <div class="batch-actions" id="enhanceBatchActions">
+                    <button class="btn btn-primary" onclick="startEnhanceBatch()">
+                        <span class="btn-text">批量增强</span>
+                        <div class="spinner" hidden></div>
+                    </button>
+                    <button class="btn btn-ghost" onclick="resetEnhanceUpload()">清空列表</button>
+                </div>
+
+                <!-- 单图增强专属：算法选择（卡片内底部） -->
+                <div class="enhance-mode-select" id="enhanceSingleAlgo" style="display: none;">
+                    <label class="enhance-radio">
+                        <input type="radio" name="enhanceAlgoSingle" value="self" checked>
+                        <span>
+                            <strong>自研画质增强</strong>
+                            <small>轻量快速，优化色彩与边缘清晰度</small>
+                        </span>
+                    </label>
+                    <label class="enhance-radio">
+                        <input type="radio" name="enhanceAlgoSingle" value="realesrgan">
+                        <span>
+                            <strong>Real-ESRGAN 超清超分</strong>
+                            <small>专业AI超分，支持4倍无损放大</small>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- 批量增强专属：算法选择（卡片内底部） -->
+                <div class="enhance-mode-select" id="enhanceBatchAlgo" style="display: none;">
+                    <label class="enhance-radio">
+                        <input type="radio" name="enhanceAlgoBatch" value="self" checked>
+                        <span>
+                            <strong>自研画质增强</strong>
+                            <small>轻量快速，优化色彩与边缘清晰度</small>
+                        </span>
+                    </label>
+                    <label class="enhance-radio">
+                        <input type="radio" name="enhanceAlgoBatch" value="realesrgan">
+                        <span>
+                            <strong>Real-ESRGAN 超清超分</strong>
+                            <small>专业AI超分，支持4倍无损放大</small>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- 隐藏文件输入 -->
+                <input type="file" id="fileInput" accept="image/*" hidden>
+                <input type="file" id="batchFileInput" accept="image/*" multiple hidden>
+            </div>
+        </div>
+
+        <!-- 进度指示器 -->
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-status" id="progressStatus"></div>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-info">
+                <div class="progress-percent" id="progressPercent">0%</div>
+            </div>
+        </div>
+
+        <!-- 转换结果区 -->
+        <div class="result-section" id="resultSection" hidden>
+            <div class="result-card">
+                <div class="result-header">
+                    <h3>转换结果</h3>
+                    <div class="result-actions">
+                        <button class="btn btn-primary btn-sm" onclick="downloadSvg()">下载 SVG</button>
+                        <button class="btn btn-ghost btn-sm" onclick="copySvg()">复制代码</button>
+                    </div>
+                </div>
+                <div class="result-body">
+                    <div class="compare-view">
+                        <div class="compare-item">
+                            <span class="compare-label">原图</span>
+                            <div class="compare-img-wrapper">
+                                <img id="resultOriginal" alt="原图">
+                                <div class="zoom-controls">
+                                    <button class="zoom-btn" onclick="zoomImage('original', -0.1)">−</button>
+                                    <span class="zoom-level" id="zoomOriginal">100%</span>
+                                    <button class="zoom-btn" onclick="zoomImage('original', 0.1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="compare-divider">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </div>
+                        <div class="compare-item">
+                            <span class="compare-label">SVG 矢量图</span>
+                            <div class="compare-img-wrapper">
+                                <div id="svgDisplay"></div>
+                                <div class="zoom-controls">
+                                    <button class="zoom-btn" onclick="zoomImage('svg', -0.1)">−</button>
+                                    <span class="zoom-level" id="zoomSvg">100%</span>
+                                    <button class="zoom-btn" onclick="zoomImage('svg', 0.1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 批量转换结果区 -->
+        <div class="result-section" id="batchResultSection" hidden>
+            <div class="result-card">
+                <div class="result-header">
+                    <h3>批量转换结果</h3>
+                    <div class="result-actions">
+                        <button class="btn btn-primary btn-sm" onclick="downloadBatchZip()">打包下载 ZIP</button>
+                    </div>
+                </div>
+                <div class="result-body">
+                    <div class="batch-result-summary">
+                        <div class="batch-result-stat total">
+                            <span class="num" id="batchTotal">0</span>
+                            <span class="label">总文件数</span>
+                        </div>
+                        <div class="batch-result-stat success">
+                            <span class="num" id="batchSuccess">0</span>
+                            <span class="label">成功</span>
+                        </div>
+                        <div class="batch-result-stat failed">
+                            <span class="num" id="batchFailed">0</span>
+                            <span class="label">失败</span>
+                        </div>
+                    </div>
+                    <div class="batch-result-items" id="batchResultItems"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 增强结果区 -->
+        <div class="result-section" id="enhanceResultSection" hidden>
+            <div class="result-card">
+                <div class="result-header">
+                    <h3>增强结果</h3>
+                    <div class="result-actions">
+                        <button class="btn btn-primary btn-sm" onclick="downloadEnhancedImage()">下载图片</button>
+                        <button class="btn btn-ghost btn-sm" onclick="convertEnhancedToSvg()">转 SVG</button>
+                    </div>
+                </div>
+                <div class="result-body">
+                    <div class="compare-view">
+                        <div class="compare-item">
+                            <span class="compare-label">原图</span>
+                            <div class="compare-img-wrapper">
+                                <img id="enhanceOriginalImg" alt="原图">
+                                <div class="zoom-controls">
+                                    <button class="zoom-btn" onclick="zoomEnhance('original', -0.1)">−</button>
+                                    <span class="zoom-level" id="zoomEnhanceOriginal">100%</span>
+                                    <button class="zoom-btn" onclick="zoomEnhance('original', 0.1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="compare-divider">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </div>
+                        <div class="compare-item">
+                            <span class="compare-label">增强结果</span>
+                            <div class="compare-img-wrapper">
+                                <img id="enhanceResultImg" alt="增强结果">
+                                <div class="zoom-controls">
+                                    <button class="zoom-btn" onclick="zoomEnhance('result', -0.1)">−</button>
+                                    <span class="zoom-level" id="zoomEnhanceResult">100%</span>
+                                    <button class="zoom-btn" onclick="zoomEnhance('result', 0.1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 批量增强结果区 -->
+        <div class="result-section" id="enhanceBatchResultSection" hidden>
+            <div class="result-card">
+                <div class="result-header">
+                    <h3>批量增强结果</h3>
+                    <div class="result-actions">
+                        <button class="btn btn-primary btn-sm" onclick="downloadEnhanceBatchZip()">打包下载 ZIP</button>
+                    </div>
+                </div>
+                <div class="result-body">
+                    <div class="batch-result-summary">
+                        <div class="batch-result-stat total">
+                            <span class="num" id="enhanceBatchTotal">0</span>
+                            <span class="label">总文件数</span>
+                        </div>
+                        <div class="batch-result-stat success">
+                            <span class="num" id="enhanceBatchSuccess">0</span>
+                            <span class="label">成功</span>
+                        </div>
+                        <div class="batch-result-stat failed">
+                            <span class="num" id="enhanceBatchFailed">0</span>
+                            <span class="label">失败</span>
+                        </div>
+                    </div>
+                    <div class="batch-result-items" id="enhanceBatchResultItems"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能特色 -->
+        <div class="features-section">
+            <div class="features-grid">
+                <div class="feature-card">
+                    <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                    <h3>高清矢量化</h3>
+                    <p>智能识别边缘与色块，生成无损矢量图形，放大不失真</p>
+                </div>
+                <div class="feature-card">
+                    <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <path d="M3 9h18M9 21V9"/>
+                    </svg>
+                    <h3>批量处理</h3>
+                    <p>支持多张图片同时转换，大幅提升工作效率</p>
+                </div>
+                <div class="feature-card">
+                    <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    <h3>本地安全</h3>
+                    <p>所有处理在服务端完成，不上传第三方，保护您的素材隐私</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <div class="footer">
+        <p>© 2024 SVG 转换工具 · 高清无损矢量化</p>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 脚本引入 -->
+    <script src="/static/js/base.js"></script>
+    <script src="/static/js/index.js"></script>
+</body>
+</html>

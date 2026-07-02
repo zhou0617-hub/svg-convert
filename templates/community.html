@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}浏览社区 - SVG 转换工坊{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/community.css') }}">
+{% endblock %}
+
+{% block content %}
+<!-- 社区 Banner -->
+<div class="community-banner">
+    <div class="banner-content">
+        <h1>浏览社区</h1>
+        <p>发现灵感，分享创意 — 探索社区中的精彩 SVG 作品</p>
+        <div class="stats-row">
+            <div class="stat-item">
+                <span class="stat-num" id="totalWorks">0</span>
+                <span class="stat-label">作品总数</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-num" id="totalUsers">0</span>
+                <span class="stat-label">创作者</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-num" id="todayConverts">0</span>
+                <span class="stat-label">今日转换</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="community-body">
+    <!-- 左侧主内容 -->
+    <div class="main-column">
+        <!-- 热门作品 -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M13 2L3 14h9l-1 8 10-5-10-5z"/>
+                    </svg>
+                    热门作品
+                </h2>
+                <a href="#" class="more-link" onclick="filterByTag('hot')">查看更多 →</a>
+            </div>
+            <div class="works-grid" id="hotWorksGrid">
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 最新上传 -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    最新上传
+                </h2>
+                <a href="#" class="more-link" onclick="filterByTag('latest')">查看更多 →</a>
+            </div>
+            <div class="works-grid" id="latestWorksGrid">
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧边栏 -->
+    <div class="side-column">
+        <!-- 快捷操作 -->
+        <div class="section-card">
+            <h3>快捷操作</h3>
+            <div class="quick-actions">
+                <a href="/" class="action-btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    上传图片转换
+                </a>
+                <a href="/history" class="action-btn btn-ghost">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    查看历史记录
+                </a>
+            </div>
+        </div>
+
+        <!-- 标签云 -->
+        <div class="section-card">
+            <h3>热门标签</h3>
+            <div class="tag-cloud" id="tagCloud">
+                <span class="tag-item" data-tag="logo">Logo</span>
+                <span class="tag-item" data-tag="icon">图标</span>
+                <span class="tag-item" data-tag="illustration">插画</span>
+                <span class="tag-item" data-tag="portrait">肖像</span>
+                <span class="tag-item" data-tag="landscape">风景</span>
+                <span class="tag-item" data-tag="pattern">图案</span>
+                <span class="tag-item" data-tag="typography">文字</span>
+                <span class="tag-item" data-tag="animal">动物</span>
+            </div>
+        </div>
+
+        <!-- 活跃创作者 -->
+        <div class="section-card">
+            <h3>活跃创作者</h3>
+            <div class="creator-list" id="creatorList">
+                <div class="creator-item">
+                    <div class="creator-avatar">A</div>
+                    <div class="creator-info">
+                        <span class="creator-name">Alice</span>
+                        <span class="creator-count">128 作品</span>
+                    </div>
+                </div>
+                <div class="creator-item">
+                    <div class="creator-avatar" style="background: linear-gradient(135deg, #22c55e, #16a34a);">B</div>
+                    <div class="creator-info">
+                        <span class="creator-name">Bob</span>
+                        <span class="creator-count">96 作品</span>
+                    </div>
+                </div>
+                <div class="creator-item">
+                    <div class="creator-avatar" style="background: linear-gradient(135deg, #f59e0b, #d97706);">C</div>
+                    <div class="creator-info">
+                        <span class="creator-name">Carol</span>
+                        <span class="creator-count">72 作品</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 作品详情弹窗 -->
+<div class="modal modal-lg" id="workModal">
+    <div class="modal-backdrop" onclick="hideModal('workModal')"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="modal-author">
+                <div class="modal-avatar" id="modalAvatar">U</div>
+                <div class="modal-author-info">
+                    <h3 id="modalTitle">作品详情</h3>
+                    <span id="modalAuthor">匿名用户</span>
+                </div>
+            </div>
+            <button class="modal-close" onclick="hideModal('workModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="work-detail-view">
+                <div class="detail-original">
+                    <span class="detail-label">原图</span>
+                    <img id="modalOriginal" src="" alt="原图">
+                </div>
+                <div class="detail-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </div>
+                <div class="detail-svg">
+                    <span class="detail-label">SVG 结果</span>
+                    <div id="modalSvgWrapper"></div>
+                </div>
+            </div>
+            <div class="work-meta-bar">
+                <span id="modalDate">2024-01-01</span>
+                <div class="work-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="copyModalSvg()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                            <rect x="9" y="9" width="13" height="13" rx="2"/>
+                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                        </svg>
+                        复制 SVG
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="downloadModalSvg()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        下载
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/community.js') }}"></script>
+{% endblock %}

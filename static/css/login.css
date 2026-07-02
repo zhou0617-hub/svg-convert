@@ -1,0 +1,391 @@
+/* ==================== 登录/注册页面（蓝白版） ==================== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f1f5f9;
+    color: var(--text-primary, #0f172a);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(circle at 20% 50%, rgba(59,130,246,0.06) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(96,165,250,0.05) 0%, transparent 50%),
+        radial-gradient(circle at 50% 80%, rgba(147,197,253,0.04) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+    animation: bgShift 15s ease-in-out infinite;
+}
+@keyframes bgShift {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.02) rotate(0.5deg); }
+}
+
+.login-container {
+    width: 100%;
+    max-width: 920px;
+    padding: 20px;
+    position: relative;
+    z-index: 1;
+}
+
+.login-card {
+    display: flex;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    overflow: hidden;
+    min-height: 540px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.06), 0 0 0 1px rgba(59,130,246,0.04);
+    animation: cardEnter 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes cardEnter {
+    from { opacity: 0; transform: translateY(30px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 左侧（蓝白版） */
+.login-left {
+    flex: 1.1;
+    background: linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(96,165,250,0.04) 50%, rgba(147,197,253,0.03) 100%);
+    padding: 52px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.login-left::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    right: -30%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 60%);
+    pointer-events: none;
+    animation: orbFloat 8s ease-in-out infinite;
+}
+
+.login-left::after {
+    content: '';
+    position: absolute;
+    bottom: -20%;
+    left: -20%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(96,165,250,0.06) 0%, transparent 60%);
+    pointer-events: none;
+    animation: orbFloat 10s ease-in-out infinite reverse;
+}
+
+@keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(20px, -20px) scale(1.05); }
+    66% { transform: translate(-10px, 10px) scale(0.95); }
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 44px;
+    position: relative;
+    z-index: 1;
+}
+
+.brand svg {
+    width: 28px;
+    height: 28px;
+    color: var(--accent, #3b82f6);
+    filter: drop-shadow(0 0 6px rgba(59,130,246,0.3));
+    animation: logoPulse 3s ease-in-out infinite;
+}
+
+@keyframes logoPulse {
+    0%, 100% { filter: drop-shadow(0 0 4px rgba(59,130,246,0.2)); }
+    50% { filter: drop-shadow(0 0 12px rgba(59,130,246,0.4)); }
+}
+
+.brand span {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+
+.login-left h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-bottom: 16px;
+    position: relative;
+    z-index: 1;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+
+.login-left > p {
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    margin-bottom: 44px;
+    position: relative;
+    z-index: 1;
+}
+
+.features {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+    z-index: 1;
+}
+
+.feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.feature:hover {
+    transform: translateX(4px);
+    color: var(--text-primary);
+}
+
+.feature svg {
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+/* 右侧（蓝白版） */
+.login-right {
+    flex: 1;
+    padding: 52px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+}
+
+.form-header {
+    margin-bottom: 32px;
+    animation: formFadeIn 0.6s ease 0.3s both;
+}
+
+@keyframes formFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.form-header h2 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+
+.form-header p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    animation: formFadeIn 0.6s ease 0.4s both;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--bg-input, #f1f5f9);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+    font-family: inherit;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    background: #ffffff;
+}
+
+.form-group input::placeholder { color: var(--text-muted); }
+
+/* 按钮（蓝白版） */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.6s ease;
+}
+.btn:hover::after { left: 100%; }
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    color: white;
+    box-shadow: 0 4px 20px rgba(59,130,246,0.3);
+}
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(59,130,246,0.35);
+}
+.btn-primary:active { transform: translateY(0); }
+
+.btn-block { width: 100%; padding: 16px; }
+
+.btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+
+.spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 切换链接（蓝白版） */
+.form-switch {
+    text-align: center;
+    margin-top: 28px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    animation: formFadeIn 0.6s ease 0.5s both;
+}
+
+.form-switch a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: 4px;
+    position: relative;
+    transition: color 0.2s;
+}
+
+.form-switch a::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.form-switch a:hover { color: var(--accent-dark); }
+.form-switch a:hover::after { width: 100%; }
+
+/* Toast（蓝白版） */
+.toast-container {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    z-index: 10000;  /* 最高层 */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    transform: translateX(120%) scale(0.9);
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.toast::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 2px 0 0 2px;
+}
+
+.toast.show { transform: translateX(0) scale(1); opacity: 1; }
+.toast-success::before { background: var(--success); }
+.toast-error::before { background: var(--error); }
+.toast-info::before { background: var(--accent); }
+
+/* 响应式（蓝白版） */
+@media (max-width: 768px) {
+    .login-card { flex-direction: column; min-height: auto; }
+    .login-left { padding: 36px 28px; min-height: auto; }
+    .login-left h1 { font-size: 1.6rem; }
+    .login-right { padding: 36px 28px; }
+    .features { flex-direction: row; flex-wrap: wrap; gap: 12px; }
+    .feature { font-size: 0.8rem; }
+}
+
+@media (max-width: 480px) {
+    .login-container { padding: 12px; }
+    .login-card { border-radius: 16px; }
+    .login-left, .login-right { padding: 28px 20px; }
+    .login-left h1 { font-size: 1.4rem; }
+}

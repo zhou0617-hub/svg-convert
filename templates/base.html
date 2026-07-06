@@ -9,8 +9,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}?v=7">
     {% block extra_css %}{% endblock %}
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
 </head>
 <body>
+    <!-- Three.js 背景 -->
     <canvas id="three-bg" style="position:fixed;inset:0;z-index:0;pointer-events:none;"></canvas>
     <div class="particles" id="particles"></div>
 
@@ -58,60 +60,70 @@
 
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- 历史详情弹窗（全局） -->
-    <div class="modal modal-lg" id="historyDetailModal">
-        <div class="modal-backdrop" onclick="hideModal('historyDetailModal')"></div>
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="detailModalTitle">历史详情</h3>
-                <button class="modal-close" onclick="hideModal('historyDetailModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="compare-view">
-                    <div class="compare-item">
-                        <span class="compare-label">原图</span>
-                        <div class="compare-img-wrapper" id="detailOriginalWrapper">
-                            <img id="detailOriginalImg" src="" alt="原图">
-                            <div class="zoom-controls">
-                                <button class="zoom-btn" onclick="window.zoomDetailImage && zoomDetailImage('original', -0.2)">−</button>
-                                <span class="zoom-level" id="detailZoomOriginal">100%</span>
-                                <button class="zoom-btn" onclick="window.zoomDetailImage && zoomDetailImage('original', 0.2)">+</button>
-                                <button class="zoom-btn" onclick="window.resetDetailZoom && resetDetailZoom('original')">⟲</button>
-                            </div>
-                        </div>
+
+<!-- 历史详情弹窗（全局） -->
+<div class="modal modal-lg" id="historyDetailModal">
+    <div class="modal-backdrop" onclick="hideModal('historyDetailModal')"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="detailModalTitle">历史详情</h3>
+            <button class="modal-close" onclick="hideModal('historyDetailModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="compare-view">
+                <!-- 原图列 -->
+                <div class="compare-item">
+    <span class="compare-label">原图</span>
+    <div class="compare-img-wrapper" id="enhanceOriginalWrapper">
+        <img id="enhanceOriginalImg" alt="原图">
+    </div>
+    <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomEnhance('original', -0.1)">−</button>
+        <span class="zoom-level" id="zoomEnhanceOriginal">100%</span>
+        <button class="zoom-btn" onclick="zoomEnhance('original', 0.1)">+</button>
+    </div>
+</div>
+
+                <div class="compare-divider">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </div>
+
+                <!-- SVG 列 -->
+                <div class="compare-item">
+                    <span class="compare-label">SVG 矢量图</span>
+                    <div class="compare-img-wrapper" id="detailSvgWrapper">
+                        <div id="detailSvgDisplay"></div>
                     </div>
-                    <div class="compare-divider">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"/>
-                        </svg>
-                    </div>
-                    <div class="compare-item">
-                        <span class="compare-label">SVG 矢量图</span>
-                        <div class="compare-img-wrapper" id="detailSvgWrapper">
-                            <div id="detailSvgDisplay"></div>
-                            <div class="zoom-controls">
-                                <button class="zoom-btn" onclick="window.zoomDetailImage && zoomDetailImage('svg', -0.2)">−</button>
-                                <span class="zoom-level" id="detailZoomSvg">100%</span>
-                                <button class="zoom-btn" onclick="window.zoomDetailImage && zoomDetailImage('svg', 0.2)">+</button>
-                                <button class="zoom-btn" onclick="window.resetDetailZoom && resetDetailZoom('svg')">⟲</button>
-                            </div>
-                        </div>
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" onclick="zoomDetailImage('svg', -0.2)">−</button>
+                        <span class="zoom-level" id="detailZoomSvg">100%</span>
+                        <button class="zoom-btn" onclick="zoomDetailImage('svg', 0.2)">+</button>
+                        <button class="zoom-btn" onclick="resetDetailZoom('svg')">⟲</button>
                     </div>
                 </div>
-                <div class="work-meta-bar" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-                    <span id="detailDate"></span>
-                    <div class="work-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
-                        <button class="btn btn-ghost btn-sm" onclick="window.copyDetailSvg && copyDetailSvg()">复制 SVG</button>
-                        <button class="btn btn-primary btn-sm" onclick="window.downloadDetailSvg && downloadDetailSvg()">下载</button>
-                    </div>
+            </div>
+
+            <div class="work-meta-bar" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                <span id="detailDate"></span>
+                <div class="work-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="btn btn-ghost btn-sm" onclick="window.copyDetailSvg && copyDetailSvg()">复制 SVG</button>
+                    <button class="btn btn-primary btn-sm" onclick="window.downloadDetailSvg && downloadDetailSvg()">下载</button>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
+    <!-- ==================== JavaScript 引用 ==================== -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="{{ url_for('static', filename='js/three-bg.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/base.js') }}?v=7"></script>
+    <script src="{{ url_for('static', filename='js/core.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/history-common.js') }}?v=2"></script>
+
+    <!-- 页面特有的 JS 放在这里 -->
     {% block extra_js %}{% endblock %}
 </body>
 </html>

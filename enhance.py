@@ -12,49 +12,66 @@ from werkzeug.utils import secure_filename
 from PIL import Image, ImageFilter, ImageEnhance
 import numpy as np
 import cv2
+from task_manager import cancel_flag, current_process, process_lock, reset_task_state
 
 enhance_bp = Blueprint('enhance', __name__)
 
-# ==================== Real-ESRGAN 调用 ====================
-
+# ==================== Real-ESRGAN 调用（支持取消）====================
 def upscale_with_realesrgan(input_path, output_path, scale=4):
-    """使用 realesrgan-ncnn-vulkan 工具进行超分"""
+    """使用 realesrgan-ncnn-vulkan 工具进行超分，支持中途取消"""
     try:
-        # 工具路径（根据你解压的位置调整）
         tool_dir = os.path.join(os.path.dirname(__file__), 'tools', 'realesrgan-ncnn-vulkan')
         exe_path = os.path.join(tool_dir, 'realesrgan-ncnn-vulkan.exe')
         
-        # 如果工具不存在，尝试在系统 PATH 中查找
         if not os.path.exists(exe_path):
             import shutil
             exe_path = shutil.which('realesrgan-ncnn-vulkan')
             if not exe_path:
                 raise RuntimeError("找不到 realesrgan-ncnn-vulkan.exe，请确认已下载到 tools/ 目录")
         
-        # 构建命令
         cmd = [
             exe_path,
             "-i", input_path,
             "-o", output_path,
-            "-s", str(scale),  # 放大倍数：2、4
-            "-n", "realesrgan-x4plus",  # 默认模型
-            "-f", "png"  # 输出格式
+            "-s", str(scale),
+            "-n", "realesrgan-x4plus",
+            "-f", "png"
         ]
         
         print(f"执行命令: {' '.join(cmd)}")
         
-        # 执行命令
-        result = subprocess.run(
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        p = subprocess.Popen(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=120,  # 超分适当延长超时时间
             encoding='utf-8',
-            errors='ignore'
+            errors='ignore',
+            creationflags=creation_flags
         )
         
-        if result.returncode != 0:
-            error_msg = result.stderr or result.stdout or "未知错误"
+        # 保存进程句柄
+        with process_lock:
+            current_process = p
+        
+        # 轮询检查取消
+        while True:
+            if cancel_flag.is_set():
+                p.terminate()
+                p.wait(timeout=2)
+                raise RuntimeError("任务已取消")
+            try:
+                stdout, stderr = p.communicate(timeout=0.5)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        
+        if cancel_flag.is_set():
+            raise RuntimeError("任务已取消")
+        
+        if p.returncode != 0:
+            error_msg = stderr or stdout or "未知错误"
             raise RuntimeError(f"Real-ESRGAN 执行失败: {error_msg}")
         
         if not os.path.exists(output_path):
@@ -64,18 +81,28 @@ def upscale_with_realesrgan(input_path, output_path, scale=4):
         
     except subprocess.TimeoutExpired:
         raise RuntimeError("Real-ESRGAN 超时（超过120秒）")
+    except RuntimeError:
+        raise
     except Exception as e:
         traceback.print_exc()
         raise RuntimeError(f"超分失败: {str(e)}")
+    finally:
+        with process_lock:
+            current_process = None
 
-# ==================== 核心增强算法 ====================
-
+# ==================== 核心增强算法（全链路支持取消）====================
 def enhance_basic(image_path):
-    """普通模式：均值漂移色块同化，优化 SVG 转换效果（保留给转SVG前置优化用）"""
+    """普通模式：均值漂移色块同化，支持中途取消"""
     try:
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         img = Image.open(image_path).convert('RGB')
         img_array = np.array(img)
         
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         mean_shifted = cv2.pyrMeanShiftFiltering(
             img_array, 
             sp=10,
@@ -84,6 +111,9 @@ def enhance_basic(image_path):
             termcrit=(cv2.TERM_CRITERIA_MAX_ITER, 5, 1)
         )
         
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         result = Image.fromarray(mean_shifted)
         enhancer = ImageEnhance.Contrast(result)
         result = enhancer.enhance(1.1)
@@ -98,12 +128,18 @@ def enhance_basic(image_path):
         return None, None, str(e)
 
 def enhance_self(image_path):
-    """自研画质增强：纯传统算法，不调用AI超分（对应前端「自研画质增强」入口）"""
+    """自研画质增强，全步骤支持中途取消"""
     try:
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         img = Image.open(image_path).convert('RGB')
         img_array = np.array(img)
         h, w = img_array.shape[:2]
         
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         # 分通道降噪
         ycbcr = cv2.cvtColor(img_array, cv2.COLOR_RGB2YCrCb)
         y, cr, cb = cv2.split(ycbcr)
@@ -112,19 +148,31 @@ def enhance_self(image_path):
         cb_smooth = cv2.medianBlur(cb, 3)
         denoised = cv2.cvtColor(cv2.merge([y_denoised, cr_smooth, cb_smooth]), cv2.COLOR_YCrCb2RGB)
         
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         # 双边滤波保边缘
         smoothed = cv2.bilateralFilter(denoised, 7, 25, 25)
         
-        # Unsharp Mask 锐化（轻度）
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
+        # Unsharp Mask 锐化
         blurred = cv2.GaussianBlur(smoothed, (0, 0), 2.0)
         high_freq = smoothed.astype(np.float32) - blurred.astype(np.float32)
         sharpened = smoothed.astype(np.float32) + high_freq * 0.8
         sharpened = np.clip(sharpened, 0, 255).astype(np.uint8)
         
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         # 轻度消光晕
         final = cv2.bilateralFilter(sharpened, 5, 15, 15)
         
-        # 自适应直方图均衡化（平衡曝光）
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
+        # 自适应直方图均衡化
         lab = cv2.cvtColor(final, cv2.COLOR_RGB2LAB)
         l, a, b = cv2.split(lab)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -132,9 +180,10 @@ def enhance_self(image_path):
         lab = cv2.merge([l, a, b])
         final = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
         
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         result = Image.fromarray(final)
-        
-        # 轻度增强
         enhancer = ImageEnhance.Contrast(result)
         result = enhancer.enhance(1.05)
         enhancer = ImageEnhance.Sharpness(result)
@@ -142,6 +191,9 @@ def enhance_self(image_path):
         enhancer = ImageEnhance.Color(result)
         result = enhancer.enhance(1.05)
         
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         # 高光修剪
         img_array = np.array(result)
         img_array = np.clip(img_array, 0, 255)
@@ -159,21 +211,25 @@ def enhance_self(image_path):
         return None, None, str(e)
 
 def enhance_super_res(image_path, scale=4):
-    """Real-ESRGAN 纯超分：只做AI放大，不叠加传统增强（对应前端「Real-ESRGAN 超清超分」入口）"""
+    """Real-ESRGAN 纯超分，支持中途取消"""
     try:
+        if cancel_flag.is_set():
+            return None, None, "任务已取消"
+            
         with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_out:
             ai_output_path = tmp_out.name
         
         try:
-            # 纯超分处理
             upscale_with_realesrgan(image_path, ai_output_path, scale=scale)
+            
+            if cancel_flag.is_set():
+                return None, None, "任务已取消"
+                
             img = Image.open(ai_output_path)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # 超分后仅做基础格式优化，不叠加画质算法
             img_array = np.array(img)
-            # 轻度抗锯齿
             final = cv2.bilateralFilter(img_array, 3, 10, 10)
             result = Image.fromarray(final)
             
@@ -184,7 +240,6 @@ def enhance_super_res(image_path, scale=4):
             return f"data:image/png;base64,{base64_data}", result, None
             
         finally:
-            # 清理临时文件
             if os.path.exists(ai_output_path):
                 try:
                     os.unlink(ai_output_path)
@@ -194,7 +249,7 @@ def enhance_super_res(image_path, scale=4):
         traceback.print_exc()
         return None, None, str(e)
 
-# 兼容旧调用（保留原函数名，内部转发）
+# 兼容旧调用
 def enhance_advanced(image_path, use_ai=True):
     if use_ai:
         return enhance_super_res(image_path)
@@ -202,11 +257,10 @@ def enhance_advanced(image_path, use_ai=True):
         return enhance_self(image_path)
 
 # ==================== API 接口 ====================
-
 @enhance_bp.route('/api/enhance', methods=['POST'])
 @login_required
 def enhance_image():
-    """单图增强：支持 self（自研增强）/ realesrgan（超分）两种模式"""
+    """单图增强：支持两种模式，全支持取消"""
     if 'image' not in request.files:
         return jsonify({'error': '没有上传图片'}), 400
     file = request.files['image']
@@ -220,14 +274,18 @@ def enhance_image():
     image_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_name)
     file.save(image_path)
     
+    # 新任务重置状态
+    reset_task_state()
+    
     try:
         if mode == 'realesrgan':
             enhanced_base64, _, error = enhance_super_res(image_path)
         else:
-            # 默认走自研增强
             enhanced_base64, _, error = enhance_self(image_path)
         
         if error:
+            if error == '任务已取消':
+                return jsonify({'error': error}), 499
             return jsonify({'error': error}), 500
         
         return jsonify({
@@ -242,7 +300,7 @@ def enhance_image():
 @enhance_bp.route('/api/enhance/convert', methods=['POST'])
 @login_required
 def enhance_and_convert():
-    """增强后直接转 SVG：支持两种增强模式"""
+    """增强后直接转 SVG，全链路支持取消"""
     if 'image' not in request.files:
         return jsonify({'error': '没有上传图片'}), 400
     file = request.files['image']
@@ -256,6 +314,9 @@ def enhance_and_convert():
     image_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_name)
     file.save(image_path)
     
+    # 新任务重置状态
+    reset_task_state()
+    
     try:
         # 第一步：增强处理
         if mode == 'realesrgan':
@@ -264,7 +325,12 @@ def enhance_and_convert():
             _, pil_img, error = enhance_self(image_path)
         
         if error:
+            if error == '任务已取消':
+                return jsonify({'error': f'增强失败: {error}'}), 499
             return jsonify({'error': f'增强失败: {error}'}), 500
+        
+        if cancel_flag.is_set():
+            return jsonify({'error': '任务已取消'}), 499
         
         # 保存增强后的临时图片
         enhanced_path = image_path + '_enhanced.png'
@@ -275,16 +341,19 @@ def enhance_and_convert():
         svg_text, convert_error = run_conversion(enhanced_path)
         
         if convert_error:
+            if convert_error == '任务已取消':
+                return jsonify({'error': f'转换失败: {convert_error}'}), 499
             return jsonify({'error': f'转换失败: {convert_error}'}), 500
         
         # 写入历史记录
         db = current_app.get_db()
         db.execute(
-            'INSERT INTO history (user_id, original_filename, image_path, svg_text) VALUES (?, ?, ?, ?)',
+            'INSERT INTO history (user_id, original_filename, image_path, svg_text) VALUES (%s, %s, %s, %s)',
             (current_user.id, safe_name, enhanced_path, svg_text)
         )
         db.commit()
-        record_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        cur = db.execute('SELECT LAST_INSERT_ID()')
+        record_id = cur.lastrowid
         
         return jsonify({
             'svg': svg_text,
@@ -303,7 +372,7 @@ def enhance_and_convert():
 @enhance_bp.route('/api/enhance/batch', methods=['POST'])
 @login_required
 def enhance_batch():
-    """批量增强：两种模式分开限制数量"""
+    """批量增强：全支持取消"""
     if 'images' not in request.files:
         return jsonify({'error': '没有上传图片'}), 400
     
@@ -312,15 +381,25 @@ def enhance_batch():
         return jsonify({'error': '文件名为空'}), 400
     
     mode = request.form.get('mode', 'self')
-    # 超分更耗时，限制更少数量
     max_count = 5 if mode == 'realesrgan' else 20
     if len(files) > max_count:
         return jsonify({'error': f'该模式一次最多处理{max_count}张图片'}), 400
     
+    # 新任务重置状态
+    reset_task_state()
     results = []
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
     
     for idx, file in enumerate(files):
+        # 每处理一张前检查取消
+        if cancel_flag.is_set():
+            results.append({
+                'filename': secure_filename(file.filename) or f'image_{idx}.png',
+                'success': False,
+                'error': '任务已取消'
+            })
+            continue
+        
         if file.filename == '':
             continue
         
@@ -341,6 +420,14 @@ def enhance_batch():
         
         if os.path.exists(image_path):
             os.unlink(image_path)
+    
+    if cancel_flag.is_set():
+        return jsonify({
+            'total': len(results),
+            'success_count': sum(1 for r in results if r.get('success')),
+            'results': results,
+            'canceled': True
+        }), 499
     
     return jsonify({
         'total': len(results),

@@ -1,10 +1,9 @@
 // ==================== 历史记录页 ====================
+// 依赖 core.js, history-common.js
+
 let historyData = [];
 let selectedIds = new Set();
 let currentRenameId = null;
-let detailZoomState = { original: 1, svg: 1 };
-let currentDetailSvg = '';
-let currentDetailFilename = '';
 
 document.addEventListener('DOMContentLoaded', () => {
     loadHistory();
@@ -232,93 +231,3 @@ async function batchDelete() {
     }
 }
 window.batchDelete = batchDelete;
-
-// ==================== 历史详情（使用全局弹窗） ====================
-async function showHistoryDetail(historyId) {
-    try {
-        const res = await fetch(`/api/history/${historyId}/detail`);
-        const data = await res.json();
-        if (!res.ok) return showToast('加载失败', 'error');
-
-        document.getElementById('detailModalTitle').textContent = data.filename;
-        document.getElementById('detailOriginalImg').src = data.image_url;
-        document.getElementById('detailSvgDisplay').innerHTML = data.svg_text;
-        document.getElementById('detailDate').textContent = formatDate(data.created_at);
-
-        currentDetailSvg = data.svg_text;
-        currentDetailFilename = data.filename.replace(/\.[^/.]+$/, '') + '.svg';
-
-        detailZoomState = { original: 1, svg: 1 };
-        document.getElementById('detailOriginalImg').style.transform = 'scale(1)';
-        document.getElementById('detailSvgDisplay').style.transform = 'scale(1)';
-        document.getElementById('detailZoomOriginal').textContent = '100%';
-        document.getElementById('detailZoomSvg').textContent = '100%';
-
-        showModal('historyDetailModal');
-    } catch (e) {
-        showToast('加载失败', 'error');
-    }
-}
-window.showHistoryDetail = showHistoryDetail;
-
-// ==================== 详情缩放 ====================
-function zoomDetailImage(type, delta) {
-    const img = type === 'original'
-        ? document.getElementById('detailOriginalImg')
-        : document.getElementById('detailSvgDisplay');
-    if (!img) return;
-    let newScale = (type === 'original' ? detailZoomState.original : detailZoomState.svg) + delta;
-    newScale = Math.max(0.2, Math.min(3, newScale));
-    img.style.transform = `scale(${newScale})`;
-    if (type === 'original') {
-        detailZoomState.original = newScale;
-        document.getElementById('detailZoomOriginal').textContent = Math.round(newScale * 100) + '%';
-    } else {
-        detailZoomState.svg = newScale;
-        document.getElementById('detailZoomSvg').textContent = Math.round(newScale * 100) + '%';
-    }
-}
-window.zoomDetailImage = zoomDetailImage;
-
-function resetDetailZoom(type) {
-    const target = 1;
-    const current = type === 'original' ? detailZoomState.original : detailZoomState.svg;
-    const delta = target - current;
-    zoomDetailImage(type, delta);
-}
-window.resetDetailZoom = resetDetailZoom;
-
-function copyDetailSvg() {
-    navigator.clipboard.writeText(currentDetailSvg).then(() => showToast('SVG 代码已复制', 'success'));
-}
-window.copyDetailSvg = copyDetailSvg;
-
-function downloadDetailSvg() {
-    const blob = new Blob([currentDetailSvg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = currentDetailFilename;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('下载已开始', 'success');
-}
-window.downloadDetailSvg = downloadDetailSvg;
-
-// ==================== 工具函数 ====================
-function formatDate(dateStr) {
-    const d = new Date(dateStr);
-    const now = new Date();
-    const diff = now - d;
-    if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
-    if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
-    if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
-    return d.toLocaleDateString('zh-CN');
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}

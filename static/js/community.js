@@ -123,15 +123,15 @@ function initTagCloud() {
 }
 
 function filterByTag(tag) {
-    // 后续实现：根据标签筛选作品
+    // 显示提示
     showToast(`筛选标签: ${tag}`, 'info');
     
-    // 模拟筛选效果
+    // 模拟筛选效果：让作品网格闪烁一下
     const grids = ['hotWorksGrid', 'latestWorksGrid'];
     grids.forEach(gridId => {
         const grid = document.getElementById(gridId);
         if (grid) {
-            grid.style.opacity = '0.5';
+            grid.style.opacity = '0.4';
             setTimeout(() => {
                 grid.style.opacity = '1';
             }, 300);

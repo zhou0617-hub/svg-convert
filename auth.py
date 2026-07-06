@@ -1,104 +1,202 @@
-﻿from flask import Blueprint, request, jsonify, current_app
-from flask_login import login_user, logout_user, login_required, current_user
+﻿import sqlite3
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for
+from flask_login import UserMixin, login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3
 
 auth_bp = Blueprint('auth', __name__)
 
-@auth_bp.route('/api/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    password = data.get('password', '').strip()
-    if not username or not password:
-        return jsonify({'error': '用户名和密码不能为空'}), 400
-    if len(password) < 4:
-        return jsonify({'error': '密码至少4位'}), 400
+# ==================== 用户模型 ====================
+class User(UserMixin):
+    def __init__(self, user_id, username, password):
+        self.id = user_id
+        self.username = username
+        self.password = password
 
-    db = current_app.get_db()
-    try:
-        db.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)',
-                   (username, generate_password_hash(password)))
-        db.commit()
-        return jsonify({'message': '注册成功'})
-    except sqlite3.IntegrityError:
-        return jsonify({'error': '用户名已存在'}), 409
+# ==================== 数据库辅助方法 ====================
+def get_db():
+    from db import get_db
+    return get_db()
 
+# ==================== 页面路由 ====================
+@auth_bp.route('/login', methods=['GET'])
+def login_page():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    return render_template('login.html')
+
+@auth_bp.route('/register', methods=['GET'])
+def register_page():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    return render_template('register.html')
+
+# ==================== 登录接口 ====================
 @auth_bp.route('/api/login', methods=['POST'])
-def login():
+def login_api():
     data = request.get_json()
     username = data.get('username', '').strip()
     password = data.get('password', '').strip()
-    db = current_app.get_db()
-    row = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-    if not row or not check_password_hash(row['password_hash'], password):
-        return jsonify({'error': '用户名或密码错误'}), 401
-    user = current_app.User(row['id'], row['username'])
+
+    if not username or not password:
+        return jsonify({'code': 1, 'msg': '请输入用户名和密码'})
+
+    db = get_db()
+    cur = db.execute('SELECT * FROM users WHERE username = %s', (username,))
+    user_row = cur.fetchone()
+
+    if not user_row:
+        return jsonify({'code': 1, 'msg': '用户名不存在'})
+
+    # 账号状态校验
+    if user_row.get('status', 1) == 0:
+        return jsonify({'code': 1, 'msg': '账号已被禁用'})
+
+    stored_pwd = user_row['password']
+    password_valid = False
+    try:
+        password_valid = check_password_hash(stored_pwd, password)
+    except:
+        password_valid = (stored_pwd == password)
+
+    if not password_valid:
+        return jsonify({'code': 1, 'msg': '密码错误'})
+
+    user = User(user_row['id'], user_row['username'], stored_pwd)
     login_user(user, remember=True)
-    return jsonify({'message': '登录成功', 'username': user.username})
 
+    # 更新最后登录时间
+    db.execute('UPDATE users SET last_login_time = CURRENT_TIMESTAMP WHERE id = %s', (user.id,))
+    db.commit()
+
+    return jsonify({'code': 0, 'msg': '登录成功', 'data': {'username': user_row['username']}})
+
+# ==================== 注册接口 ====================
+@auth_bp.route('/api/register', methods=['POST'])
+def register_api():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
+
+    if not username or not password:
+        return jsonify({'code': 1, 'msg': '请输入用户名和密码'})
+    if len(username) < 3:
+        return jsonify({'code': 1, 'msg': '用户名长度至少3位'})
+    # 统一密码规则：至少6位
+    if len(password) < 6:
+        return jsonify({'code': 1, 'msg': '密码长度至少6位'})
+
+    try:
+        db = get_db()
+        cur = db.execute('SELECT id FROM users WHERE username = %s', (username,))
+        if cur.fetchone():
+            return jsonify({'code': 1, 'msg': '用户名已存在'})
+
+        hashed_pw = generate_password_hash(password)
+        db.execute(
+            'INSERT INTO users (username, password, nickname) VALUES (%s, %s, %s)',
+            (username, hashed_pw, username)
+        )
+        db.commit()
+        return jsonify({'code': 0, 'msg': '注册成功'})
+    except Exception as e:
+        print(f"[注册错误] {str(e)}")
+        try:
+            db.conn.rollback()
+        except:
+            pass
+        return jsonify({'code': 1, 'msg': '注册失败，服务器异常'}), 500
+
+# ==================== 登出接口 ====================
 @auth_bp.route('/api/logout', methods=['POST'])
-@login_required
-def logout():
+def logout_api():
     logout_user()
-    return jsonify({'message': '已登出'})
+    return jsonify({'code': 0, 'msg': '已退出登录'})
 
+# ==================== 当前用户信息 ====================
 @auth_bp.route('/api/current_user', methods=['GET'])
 def current_user_info():
     if current_user.is_authenticated:
         return jsonify({
-            'logged_in': True, 
-            'username': current_user.username,
-            'user_id': current_user.id
+            'code': 0,
+            'data': {'id': current_user.id, 'username': current_user.username},
+            'msg': 'ok'
         })
-    return jsonify({'logged_in': False})
+    return jsonify({'code': 1, 'data': None, 'msg': '未登录'})
 
-@auth_bp.route('/api/change_password', methods=['POST'])
-@login_required
-def change_password():
-    data = request.get_json()
-    old_password = data.get('old_password', '')
-    new_password = data.get('new_password', '')
-    
-    if len(new_password) < 4:
-        return jsonify({'error': '新密码至少4位'}), 400
-    
-    db = current_app.get_db()
-    row = db.execute('SELECT password_hash FROM users WHERE id = ?', 
-                     (current_user.id,)).fetchone()
-    
-    if not check_password_hash(row['password_hash'], old_password):
-        return jsonify({'error': '当前密码错误'}), 401
-    
-    db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-               (generate_password_hash(new_password), current_user.id))
-    db.commit()
-    return jsonify({'message': '密码修改成功'})
-
-# ========== 用户资料 API ==========
+# ==================== 个人信息接口 ====================
 @auth_bp.route('/api/profile', methods=['GET'])
 @login_required
 def get_profile():
-    db = current_app.get_db()
-    row = db.execute('SELECT id, username, nickname, avatar FROM users WHERE id = ?', 
-                     (current_user.id,)).fetchone()
+    db = get_db()
+    cur = db.execute(
+        'SELECT id, username, nickname, avatar, create_time FROM users WHERE id = %s',
+        (current_user.id,)
+    )
+    user_row = cur.fetchone()
+    
+    if not user_row:
+        return jsonify({'code': 1, 'msg': '用户不存在'}), 404
+    
     return jsonify({
-        'id': row['id'],
-        'username': row['username'],
-        'nickname': row['nickname'] or row['username'],
-        'avatar': row['avatar'] or ''
+        'id': user_row['id'],
+        'username': user_row['username'],
+        'nickname': user_row['nickname'] or user_row['username'],
+        'avatar': user_row['avatar'] or '',
+        'create_time': user_row['create_time'],
+        'success': True
     })
 
 @auth_bp.route('/api/profile', methods=['POST'])
 @login_required
 def update_profile():
     data = request.get_json()
-    nickname = data.get('nickname', '').strip()
-    avatar = data.get('avatar', '')
-    db = current_app.get_db()
-    if nickname:
-        db.execute('UPDATE users SET nickname = ? WHERE id = ?', (nickname, current_user.id))
-    if avatar and avatar.startswith('data:image'):
-        db.execute('UPDATE users SET avatar = ? WHERE id = ?', (avatar, current_user.id))
+    db = get_db()
+    
+    # 更新昵称
+    if 'nickname' in data:
+        nickname = data['nickname'].strip()
+        if len(nickname) > 50:
+            return jsonify({'success': False, 'msg': '昵称不能超过50字'}), 400
+        db.execute(
+            'UPDATE users SET nickname = %s WHERE id = %s',
+            (nickname, current_user.id)
+        )
+    
+    # 更新头像
+    if 'avatar' in data:
+        avatar = data['avatar']
+        if avatar and not avatar.startswith('data:image'):
+            return jsonify({'success': False, 'msg': '头像格式错误'}), 400
+        db.execute(
+            'UPDATE users SET avatar = %s WHERE id = %s',
+            (avatar, current_user.id)
+        )
+    
     db.commit()
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'msg': '更新成功'})
+
+# ==================== 修改密码接口 ====================
+@auth_bp.route('/api/change_password', methods=['POST'])
+@login_required
+def change_password():
+    data = request.get_json()
+    old_password = data.get('old_password', '')
+    new_password = data.get('new_password', '')
+
+    if not old_password or not new_password:
+        return jsonify({'error': '请输入完整密码信息'}), 400
+    # 统一密码规则：至少6位
+    if len(new_password) < 6:
+        return jsonify({'error': '新密码长度至少6位'}), 400
+
+    db = get_db()
+    cur = db.execute('SELECT password FROM users WHERE id = %s', (current_user.id,))
+    user_row = cur.fetchone()
+
+    if not check_password_hash(user_row['password'], old_password):
+        return jsonify({'error': '原密码错误'}), 400
+
+    hashed_pw = generate_password_hash(new_password)
+    db.execute('UPDATE users SET password = %s WHERE id = %s', (hashed_pw, current_user.id))
+    db.commit()
+    return jsonify({'success': True, 'msg': '密码修改成功'})

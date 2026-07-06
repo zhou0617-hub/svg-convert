@@ -1,58 +1,101 @@
-// ==================== 格式转换页面 ====================
+// ==================== 格式转换页（index） ====================
+// 依赖 core.js, auth.js
+
+
+
 let selectedFile = null;
 let batchFiles = [];
 let batchResults = [];
-let zoomState = { original: 1, svg: 1 };
 let currentMode = 'single';
-let isConverting = false;
+let currentXhr = null;
+let isTaskRunning = false;
+let enhanceSelectedFile = null;
+let enhanceBatchFiles = [];
+let enhanceBatchResults = [];
+let currentEnhancedImage = '';
+let currentEnhancedFilename = '';
 
+const stepLabels = ['上传文件', '图像分析', '矢量化处理', '结果优化', '处理完成'];
+const stepWeight = [0.15, 0.2, 0.45, 0.15, 0.05];
+
+// ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('beforeunload', cancelCurrentTask);
     setupDragDrop();
 });
 
 // ==================== 模式切换 ====================
-// ==================== 模式切换 ====================
-// ==================== 模式切换（修复版） ====================
 function switchMode(mode) {
+    // 取消正在进行的任务
+    cancelCurrentTask();
+
+    // 更新当前模式
     currentMode = mode;
-    document.querySelectorAll('.mode-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.mode === mode);
-    });
 
-    // 转换模块显示控制
-    document.getElementById('singleContent').style.display = mode === 'single' ? '' : 'none';
-    document.getElementById('batchContent').style.display = mode === 'batch' ? '' : 'none';
-    
-    // 增强模块显示控制
-    document.getElementById('enhanceSingleContent').style.display = mode === 'enhance_single' ? '' : 'none';
-    document.getElementById('enhanceBatchContent').style.display = mode === 'enhance_batch' ? '' : 'none';
-
-    // ========== 新增：算法选择区显隐控制 ==========
-    document.getElementById('enhanceSingleAlgo').style.display = mode === 'enhance_single' ? 'grid' : 'none';
-    document.getElementById('enhanceBatchAlgo').style.display = mode === 'enhance_batch' ? 'grid' : 'none';
-
-    // 转换相关元素重置
-    document.getElementById('uploadPreview').classList.remove('active');
-    document.getElementById('batchFileList').classList.toggle('active', mode === 'batch' && batchFiles.length > 0);
-    document.getElementById('batchActions').classList.toggle('active', mode === 'batch' && batchFiles.length > 0);
-    document.getElementById('resultSection').hidden = true;
-    document.getElementById('batchResultSection').hidden = true;
-
-    // 增强相关元素重置
-    document.getElementById('enhanceUploadPreview').classList.remove('active');
-    document.getElementById('enhanceBatchFileList').classList.toggle('active', mode === 'enhance_batch' && enhanceBatchFiles.length > 0);
-    document.getElementById('enhanceBatchActions').classList.toggle('active', mode === 'enhance_batch' && enhanceBatchFiles.length > 0);
-    document.getElementById('enhanceResultSection').hidden = true;
-    document.getElementById('enhanceBatchResultSection').hidden = true;
-
-    // 全局重置
+    // 清空文件输入框，防止残留
     document.getElementById('fileInput').value = '';
     document.getElementById('batchFileInput').value = '';
+
+    // 重置所有文件变量
     selectedFile = null;
     batchFiles = [];
     enhanceSelectedFile = null;
     enhanceBatchFiles = [];
-    hideProgress();
+
+    // 切换标签页 active 样式
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.mode === mode);
+    });
+
+    // 显示/隐藏对应的上传提示内容
+    document.getElementById('singleContent').style.display = mode === 'single' ? '' : 'none';
+    document.getElementById('batchContent').style.display = mode === 'batch' ? '' : 'none';
+    document.getElementById('enhanceSingleContent').style.display = mode === 'enhance_single' ? '' : 'none';
+    document.getElementById('enhanceBatchContent').style.display = mode === 'enhance_batch' ? '' : 'none';
+
+    // 增强算法选择框：仅在增强模式下显示
+    const globalAlgoBox = document.getElementById('globalEnhanceAlgo');
+    if (globalAlgoBox) {
+        globalAlgoBox.style.display = (mode === 'enhance_single' || mode === 'enhance_batch') ? 'grid' : 'none';
+    }
+
+    // ---- 单图转换预览 ----
+    const uploadPreview = document.getElementById('uploadPreview');
+    if (uploadPreview) uploadPreview.classList.remove('active');
+
+    // ---- 批量转换列表 ----
+    const batchFileList = document.getElementById('batchFileList');
+    if (batchFileList) {
+        batchFileList.classList.toggle('active', mode === 'batch' && batchFiles.length > 0);
+    }
+    const batchActions = document.getElementById('batchActions');
+    if (batchActions) {
+        batchActions.classList.toggle('active', mode === 'batch' && batchFiles.length > 0);
+    }
+
+    // ---- 单图增强预览 ----
+    const enhanceUploadPreview = document.getElementById('enhanceUploadPreview');
+    if (enhanceUploadPreview) enhanceUploadPreview.classList.remove('active');
+
+    // ---- 批量增强列表 ----
+    const enhanceBatchFileList = document.getElementById('enhanceBatchFileList');
+    if (enhanceBatchFileList) {
+        enhanceBatchFileList.classList.toggle('active', mode === 'enhance_batch' && enhanceBatchFiles.length > 0);
+    }
+    const enhanceBatchActions = document.getElementById('enhanceBatchActions');
+    if (enhanceBatchActions) {
+        enhanceBatchActions.classList.toggle('active', mode === 'enhance_batch' && enhanceBatchFiles.length > 0);
+    }
+
+    // ---- 隐藏所有结果区（安全调用） ----
+    const resultSections = ['resultSection', 'batchResultSection', 'enhanceResultSection', 'enhanceBatchResultSection'];
+    resultSections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.hidden = true;
+    });
+
+    // 隐藏进度弹窗（如果有）
+    hideProgressModal();
 }
 window.switchMode = switchMode;
 
@@ -63,23 +106,26 @@ function setupDragDrop() {
     const batchInput = document.getElementById('batchFileInput');
 
     zone.addEventListener('click', (e) => {
-        // 点击按钮、单选框、模式选择、算法选择区时，不触发文件选择
-        if (e.target.closest('button, input, label, .enhance-mode-select, .enhance-mode-select *')) return;
-
+        if (e.target.closest('button, button *, input, label, .enhance-mode-select, .enhance-mode-select *')) return;
         if (currentMode === 'single' || currentMode === 'enhance_single') {
             singleInput.click();
         } else {
             batchInput.click();
         }
     });
-    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+
+    zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+    });
     zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+
     zone.addEventListener('drop', (e) => {
         e.preventDefault();
         zone.classList.remove('dragover');
         const files = e.dataTransfer.files;
         if (files.length === 0) return;
-    
+
         if (currentMode === 'single') {
             handleFile(files[0]);
         } else if (currentMode === 'batch') {
@@ -90,26 +136,50 @@ function setupDragDrop() {
             handleEnhanceBatchFiles(Array.from(files));
         }
     });
-        singleInput.addEventListener('change', (e) => {
-        if (!e.target.files.length) return;
+
+// 单图文件输入
+    singleInput.addEventListener('change', function(e) {
+        console.log('[文件选择] singleInput change 触发, files:', e.target.files.length);
+        if (!e.target.files.length) {
+            // 没有选择文件，重置以便下次
+            this.value = '';
+            return;
+        }
+        const file = e.target.files[0];
+        // 立即重置，确保下次选择同一文件也能触发
+        this.value = '';
+        
         if (currentMode === 'enhance_single') {
-            handleEnhanceSingleFile(e.target.files[0]);
+            handleEnhanceSingleFile(file);
         } else {
-            handleFile(e.target.files[0]);
+            handleFile(file);
         }
     });
-    batchInput.addEventListener('change', (e) => {
-    if (!e.target.files.length) return;
-    if (currentMode === 'enhance_batch') {
-        handleEnhanceBatchFiles(Array.from(e.target.files));
-    } else {
-        handleBatchFiles(Array.from(e.target.files));
-    }
-});
+
+    // 批量文件输入
+    batchInput.addEventListener('change', function(e) {
+        console.log('[文件选择] batchInput change 触发, files:', e.target.files.length);
+        if (!e.target.files.length) {
+            this.value = '';
+            return;
+        }
+        const files = Array.from(e.target.files);
+        // 立即重置，确保下次选择同一文件也能触发
+        this.value = '';
+        
+        if (currentMode === 'enhance_batch') {
+            handleEnhanceBatchFiles(files);
+        } else {
+            handleBatchFiles(files);
+        }
+    });
 }
 
-// ==================== 单图处理 ====================
+// ==================== 单图转换 - 文件处理 ====================
 function handleFile(file) {
+    console.log('[handleFile] 收到文件:', file.name, file.size);
+    showToast(`已选择: ${file.name}`, 'info');
+    cancelCurrentTask();
     if (!file.type.startsWith('image/')) {
         showToast('请选择图片文件', 'error');
         return;
@@ -118,8 +188,10 @@ function handleFile(file) {
         showToast('文件大小不能超过 10MB', 'error');
         return;
     }
+
     selectedFile = file;
     currentFilename = file.name;
+
     const reader = new FileReader();
     reader.onload = (e) => {
         document.getElementById('previewImg').src = e.target.result;
@@ -131,7 +203,7 @@ function handleFile(file) {
     reader.readAsDataURL(file);
 }
 
-// ==================== 批量处理 ====================
+// ==================== 批量转换 - 文件处理 ====================
 function handleBatchFiles(files) {
     const validFiles = files.filter(f => {
         if (!f.type.startsWith('image/')) {
@@ -144,12 +216,15 @@ function handleBatchFiles(files) {
         }
         return true;
     });
+
     if (batchFiles.length + validFiles.length > 20) {
         showToast('最多支持 20 张图片', 'error');
         return;
     }
+
     batchFiles = [...batchFiles, ...validFiles];
     renderBatchList();
+
     document.getElementById('batchFileList').classList.add('active');
     document.getElementById('batchActions').classList.add('active');
     document.getElementById('singleContent').style.display = 'none';
@@ -186,215 +261,521 @@ window.removeBatchFile = removeBatchFile;
 
 // ==================== 重置上传 ====================
 function resetUpload() {
+    cancelCurrentTask();
     selectedFile = null;
     batchFiles = [];
     batchResults = [];
-    document.getElementById('fileInput').value = '';
-    document.getElementById('batchFileInput').value = '';
-    document.getElementById('singleContent').style.display = '';
-    document.getElementById('batchContent').style.display = currentMode === 'batch' ? '' : 'none';
-    document.getElementById('uploadPreview').classList.remove('active');
-    document.getElementById('batchFileList').classList.remove('active');
-    document.getElementById('batchActions').classList.remove('active');
-    document.getElementById('resultSection').hidden = true;
-    document.getElementById('batchResultSection').hidden = true;
-    hideProgress();
-    zoomState = { original: 1, svg: 1 };
+    currentSvg = '';
+    currentFilename = '';
+
+    const fileInput = document.getElementById('fileInput');
+    const batchInput = document.getElementById('batchFileInput');
+    if (fileInput) fileInput.value = '';
+    if (batchInput) batchInput.value = '';
+    
+    // 安全隐藏所有结果区
+    ['resultSection', 'batchResultSection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.hidden = true;
+    });
+    
+    const singleContent = document.getElementById('singleContent');
+    const batchContent = document.getElementById('batchContent');
+    if (singleContent) singleContent.style.display = currentMode === 'single' ? '' : 'none';
+    if (batchContent) batchContent.style.display = currentMode === 'batch' ? '' : 'none';
+    
+    const preview = document.getElementById('uploadPreview');
+    if (preview) preview.classList.remove('active');
+    
+    const list = document.getElementById('batchFileList');
+    if (list) list.classList.remove('active');
+    
+    const actions = document.getElementById('batchActions');
+    if (actions) actions.classList.remove('active');
+    
+    hideProgressModal();
 }
 window.resetUpload = resetUpload;
 
-// ==================== 进度指示器 ====================
-function showProgress(status, percent, step = null) {
-    const container = document.getElementById('progressContainer');
-    container.classList.add('active');
-    document.getElementById('progressStatus').innerHTML = status;
-    document.getElementById('progressFill').style.width = Math.min(percent, 100) + '%';
-    document.getElementById('progressPercent').textContent = Math.round(Math.min(percent, 100)) + '%';
-    if (step !== null) {
-        const steps = document.querySelectorAll('.progress-step');
-        steps.forEach((el, idx) => {
-            el.classList.remove('active', 'done');
-            if (idx < step) el.classList.add('done');
-            else if (idx === step) el.classList.add('active');
-        });
-    }
+function resetEnhanceUpload() {
+    cancelCurrentTask();
+    enhanceSelectedFile = null;
+    enhanceBatchFiles = [];
+    enhanceBatchResults = [];
+    currentEnhancedImage = '';
+    
+    const fileInput = document.getElementById('fileInput');
+    const batchInput = document.getElementById('batchFileInput');
+    if (fileInput) fileInput.value = '';
+    if (batchInput) batchInput.value = '';
+    
+    // 安全隐藏所有可能的结果区
+    ['enhanceResultSection', 'enhanceBatchResultSection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.hidden = true;
+    });
+    
+    const singleContent = document.getElementById('enhanceSingleContent');
+    const batchContent = document.getElementById('enhanceBatchContent');
+    if (singleContent) singleContent.style.display = currentMode === 'enhance_single' ? '' : 'none';
+    if (batchContent) batchContent.style.display = currentMode === 'enhance_batch' ? '' : 'none';
+    
+    const preview = document.getElementById('enhanceUploadPreview');
+    if (preview) preview.classList.remove('active');
+    
+    const list = document.getElementById('enhanceBatchFileList');
+    if (list) list.classList.remove('active');
+    
+    const actions = document.getElementById('enhanceBatchActions');
+    if (actions) actions.classList.remove('active');
+    
+    hideProgressModal();
 }
-function hideProgress() {
-    document.getElementById('progressContainer').classList.remove('active');
+window.resetEnhanceUpload = resetEnhanceUpload;
+// ==================== 进度指示器 ====================
+function showProgressModal() {
+    document.getElementById('progressModal').classList.add('active');
+    document.querySelectorAll('.progress-step-item').forEach(el => {
+        el.classList.remove('active', 'done');
+        el.querySelector('.step-status').textContent = '等待中';
+    });
+    updateGlobalProgress(0, '准备中...');
 }
 
-// ==================== 单图转换 ====================
-async function startConvert() {
+function hideProgressModal() {
+    document.getElementById('progressModal').classList.remove('active');
+    currentXhr = null;
+    isTaskRunning = false;
+}
+
+function setStepActive(stepIndex) {
+    const items = document.querySelectorAll('.progress-step-item');
+    items.forEach((el, idx) => {
+        el.classList.remove('active');
+        if (idx < stepIndex) {
+            el.classList.add('done');
+            el.querySelector('.step-status').textContent = '已完成';
+        } else if (idx === stepIndex) {
+            el.classList.add('active');
+            el.querySelector('.step-status').textContent = '进行中';
+        }
+    });
+}
+
+function updateGlobalProgress(percent, statusText) {
+    percent = Math.min(100, Math.max(0, percent));
+    document.getElementById('globalProgressFill').style.width = percent + '%';
+    document.getElementById('progressPercentText').textContent = Math.round(percent) + '%';
+    if (statusText) {
+        document.getElementById('progressStatusText').innerHTML = statusText;
+    }
+}
+
+function calcStepProgress(stepIndex, stepPercent) {
+    let base = 0;
+    for (let i = 0; i < stepIndex; i++) {
+        base += stepWeight[i];
+    }
+    return (base + stepWeight[stepIndex] * stepPercent) * 100;
+}
+
+// ==================== 单图转换 - 执行 ====================
+async function startConvert(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
     if (!requireAuth()) return;
-    if (!selectedFile) return showToast('请选择一张图片', 'error');
-    if (isConverting) return;
+    if (!selectedFile) {
+        showToast('请选择一张图片', 'error');
+        return;
+    }
+    if (isTaskRunning) {
+        showToast('正在处理中，请稍候', 'info');
+        return;
+    }
 
     const btn = document.getElementById('convertBtn');
-    setLoading(btn, true);
-    isConverting = true;
-
-    const steps = ['📤', '🔍', '🎨', '✨', '✅'];
-    const stepLabels = ['上传', '分析', '矢量化', '优化', '完成'];
-    let stepsHtml = steps.map((icon, idx) => `
-        <div class="progress-step" data-step="${idx}">
-            <span class="step-icon">${icon}</span>
-            ${stepLabels[idx]}
-            <span class="step-line"></span>
-        </div>
-    `).join('');
-    let stepsContainer = document.querySelector('.progress-steps');
-    if (!stepsContainer) {
-        const container = document.getElementById('progressContainer');
-        const div = document.createElement('div');
-        div.className = 'progress-steps';
-        div.innerHTML = stepsHtml;
-        container.appendChild(div);
-    } else {
-        stepsContainer.innerHTML = stepsHtml;
+    const progressModal = document.getElementById('progressModal');
+    if (!btn || !progressModal) {
+        showToast('页面元素异常，请刷新后重试', 'error');
+        return;
     }
 
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        // 分阶段匀速增长，更真实不跳变
-        if (progress < 30) progress += 1.5;
-        else if (progress < 60) progress += 1;
-        else if (progress < 90) progress += 0.6;
-        else progress += 0.2;
-    
-        if (progress > 95) progress = 95;
-        const stepIdx = Math.min(Math.floor(progress / 20), steps.length - 1);
-        const statusHtml = `
-            <span class="status-dot processing"></span>
-            正在 <span class="highlight">${stepLabels[stepIdx]}</span>
-            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:4px;">${steps[stepIdx]}</span>
-        `;
-        showProgress(statusHtml, progress, stepIdx);
-    }, 120); // 加快更新频率，更流畅
+    cancelCurrentTask();
+    isTaskRunning = true;
+    const batchBtn = document.getElementById('batchConvertBtn');
+    setLoading(batchBtn, true);
+    setLoading(btn, true);
+
+    try {
+        showProgressModal();
+        setStepActive(0);
+    } catch (err) {
+        console.error('打开进度弹窗失败:', err);
+        isTaskRunning = false;
+        setLoading(btn, false);
+        showToast('初始化失败，请刷新重试', 'error');
+        return;
+    }
 
     const formData = new FormData();
     formData.append('image', selectedFile);
 
-    try {
-        const res = await fetch('/api/convert', { method: 'POST', body: formData });
-        const data = await res.json();
-        clearInterval(progressInterval);
-        if (res.ok) {
-            currentSvg = data.svg;
-            currentFilename = data.filename || selectedFile.name;
-            showProgress(`<span class="status-dot done"></span> 🎉 转换完成！`, 100, steps.length - 1);
-            setTimeout(() => { hideProgress(); showResult(data.svg); showToast('转换成功！', 'success'); }, 600);
-        } else {
-            showProgress(`<span class="status-dot error"></span> ❌ 转换失败：${escapeHtml(data.error || '未知错误')}`, 100, steps.length - 1);
-            setTimeout(() => { hideProgress(); showToast(data.error || '转换失败', 'error'); }, 800);
+    const xhr = new XMLHttpRequest();
+    currentXhr = xhr;
+
+    xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+            const percent = e.loaded / e.total;
+            const totalPercent = calcStepProgress(0, percent);
+            updateGlobalProgress(totalPercent, `正在 <span class="highlight">上传文件</span>`);
         }
-    } catch (e) {
-        clearInterval(progressInterval);
-        hideProgress();
-        showToast('网络错误', 'error');
-    } finally {
+    });
+
+    xhr.upload.addEventListener('load', () => {
+        if (isTaskRunning) simulateProcessProgress();
+    });
+
+    xhr.addEventListener('load', () => {
+        try {
+            const data = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300) {
+                setStepActive(4);
+                updateGlobalProgress(100, `<span class="status-dot done"></span> 🎉 转换完成！`);
+                
+                currentSvg = data.svg;
+                currentFilename = data.filename || selectedFile.name;
+                
+                setTimeout(() => {
+                    hideProgressModal();
+                    showResult(data.svg);
+                    showToast('转换成功！', 'success');
+                }, 600);
+            } else {
+                updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 转换失败`);
+                setTimeout(() => {
+                    hideProgressModal();
+                    showToast(data.error || '转换失败', 'error');
+                }, 800);
+            }
+        } catch (e) {
+            updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 响应解析失败`);
+            setTimeout(() => {
+                hideProgressModal();
+                showToast('网络错误', 'error');
+            }, 800);
+        } finally {
+            setLoading(btn, false);
+            isTaskRunning = false;
+            currentXhr = null;
+        }
+    });
+
+    xhr.addEventListener('error', () => {
+        updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 网络错误`);
+        setTimeout(() => {
+            hideProgressModal();
+            showToast('网络错误', 'error');
+        }, 800);
         setLoading(btn, false);
-        isConverting = false;
-    }
+        isTaskRunning = false;
+        currentXhr = null;
+    });
+
+    xhr.addEventListener('abort', () => {
+        updateGlobalProgress(0, `<span class="status-dot error"></span> 已取消处理`);
+        setTimeout(() => {
+            hideProgressModal();
+            showToast('已取消处理', 'info');
+        }, 400);
+        setLoading(btn, false);
+        isTaskRunning = false;
+        currentXhr = null;
+    });
+
+    xhr.open('POST', '/api/convert');
+    xhr.send(formData);
 }
 window.startConvert = startConvert;
 
-// ==================== 批量转换 ====================
-async function startBatchConvert() {
+function simulateProcessProgress() {
+    setStepActive(1);
+    let p = 0;
+    const timer1 = setInterval(() => {
+        if (!isTaskRunning) return clearInterval(timer1);
+        p += 0.05;
+        if (p >= 1) { 
+            clearInterval(timer1); 
+            setStepActive(2);
+            let p2 = 0;
+            const timer2 = setInterval(() => {
+                if (!isTaskRunning) return clearInterval(timer2);
+                p2 += 0.02;
+                if (p2 >= 1) { 
+                    clearInterval(timer2);
+                    setStepActive(3);
+                    let p3 = 0;
+                    const timer3 = setInterval(() => {
+                        if (!isTaskRunning) return clearInterval(timer3);
+                        p3 += 0.08;
+                        if (p3 >= 1) { clearInterval(timer3); return; }
+                        updateGlobalProgress(calcStepProgress(3, p3), `正在 <span class="highlight">结果优化</span>`);
+                    }, 150);
+                    return; 
+                }
+                updateGlobalProgress(calcStepProgress(2, p2), `正在 <span class="highlight">矢量化处理</span>`);
+            }, 120);
+            return; 
+        }
+        updateGlobalProgress(calcStepProgress(1, p), `正在 <span class="highlight">图像分析</span>`);
+    }, 150);
+}
+
+function cancelCurrentTask() {
+    // 异步取消，不等待响应
+    fetch('/api/cancel', { method: 'POST' }).catch(() => {});
+    if (currentXhr && isTaskRunning) {
+        currentXhr.abort();
+        currentXhr = null;
+        isTaskRunning = false;
+    }
+}
+window.cancelCurrentTask = cancelCurrentTask;
+
+// ==================== 批量转换 - 执行 ====================
+function startBatchConvert(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
     if (!requireAuth()) return;
     if (batchFiles.length === 0) return showToast('请选择图片', 'error');
-    if (isConverting) return;
-    isConverting = true;
-    batchResults = [];
-    document.getElementById('batchResultSection').hidden = true;
+    if (isTaskRunning) return;
 
-    document.querySelectorAll('.batch-file-item .file-status').forEach(el => {
-        el.className = 'file-status processing';
-        el.textContent = '处理中...';
-    });
+    const progressModal = document.getElementById('progressModal');
+    if (!progressModal) {
+        showToast('页面元素异常，请刷新重试', 'error');
+        return;
+    }
+
+    cancelCurrentTask();
+    isTaskRunning = true;
+    showProgressModal();
+    setStepActive(0);
 
     const formData = new FormData();
     batchFiles.forEach(f => formData.append('images', f));
 
-    const steps = ['📤', '🔍', '🎨', '✨', '✅'];
-    const stepLabels = ['上传', '分析', '矢量化', '优化', '完成'];
-    let stepsHtml = steps.map((icon, idx) => `
-        <div class="progress-step" data-step="${idx}">
-            <span class="step-icon">${icon}</span>
-            ${stepLabels[idx]}
-            <span class="step-line"></span>
-        </div>
-    `).join('');
-    let stepsContainer = document.querySelector('.progress-steps');
-    if (!stepsContainer) {
-        const container = document.getElementById('progressContainer');
-        const div = document.createElement('div');
-        div.className = 'progress-steps';
-        div.innerHTML = stepsHtml;
-        container.appendChild(div);
-    } else {
-        stepsContainer.innerHTML = stepsHtml;
-    }
+    const xhr = new XMLHttpRequest();
+    currentXhr = xhr;
 
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        progress += Math.random() * 1.5 + 0.5;
-        if (progress > 95) progress = 95;
-        const stepIdx = Math.min(Math.floor(progress / 20), steps.length - 1);
-        const statusHtml = `
-            <span class="status-dot processing"></span>
-            批量转换中 <span class="highlight">${Math.floor(progress / 100 * batchFiles.length)}/${batchFiles.length}</span>
-            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:4px;">${steps[stepIdx]}</span>
-        `;
-        showProgress(statusHtml, progress, stepIdx);
-    }, 300);
-
-    try {
-        const res = await fetch('/api/convert/batch', { method: 'POST', body: formData });
-        const data = await res.json();
-        clearInterval(progressInterval);
-        if (res.ok) {
-            batchResults = data.results || [];
-            const items = document.querySelectorAll('.batch-file-item');
-            batchResults.forEach((r, i) => {
-                if (items[i]) {
-                    const status = items[i].querySelector('.file-status');
-                    if (r.success) { status.className = 'file-status done'; status.textContent = '✅ 完成'; }
-                    else { status.className = 'file-status error'; status.textContent = '❌ ' + (r.error || '失败'); }
-                }
-            });
-            showProgress(`<span class="status-dot done"></span> 🎉 批量转换完成！成功 ${data.success_count}/${data.total}`, 100, steps.length - 1);
-            setTimeout(() => { hideProgress(); showBatchResults(data); showToast(`转换完成: ${data.success_count}/${data.total} 成功`, 'success'); }, 600);
-        } else {
-            showProgress(`<span class="status-dot error"></span> ❌ 批量转换失败`, 100, steps.length - 1);
-            setTimeout(() => { hideProgress(); showToast(data.error || '批量转换失败', 'error'); }, 800);
+    xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+            const percent = e.loaded / e.total;
+            const totalPercent = calcStepProgress(0, percent);
+            updateGlobalProgress(totalPercent, `正在 <span class="highlight">批量上传文件</span>`);
         }
-    } catch (e) {
-        clearInterval(progressInterval);
-        hideProgress();
-        showToast('网络错误', 'error');
-    } finally {
-        isConverting = false;
-    }
+    });
+
+    xhr.addEventListener('load', () => {
+        try {
+            const data = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300) {
+                setStepActive(4);
+                updateGlobalProgress(100, `<span class="status-dot done"></span> 🎉 批量转换完成！成功 ${data.success_count}/${data.total}`);
+                
+                batchResults = data.results || [];
+                const items = document.querySelectorAll('#batchFileList .batch-file-item');
+                data.results.forEach((resItem, idx) => {
+                    if(items[idx]){
+                        const statusDom = items[idx].querySelector('.file-status');
+                        if(resItem.success){
+                            statusDom.className = 'file-status done';
+                            statusDom.textContent = '✅ 完成';
+                        }else{
+                            statusDom.className = 'file-status error';
+                            statusDom.textContent = '❌ 失败';
+                        }
+                    }
+                });
+
+                setTimeout(() => {
+                    hideProgressModal();
+                    showBatchResults(data);
+                    showToast(`转换完成: ${data.success_count}/${data.total} 成功`, 'success');
+                }, 600);
+            } else {
+                updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 批量转换失败`);
+                setTimeout(() => {
+                    hideProgressModal();
+                    showToast(data.error || '批量转换失败', 'error');
+                }, 800);
+            }
+        } catch (e) {
+            updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 响应解析失败`);
+            setTimeout(() => {
+                hideProgressModal();
+                showToast('网络错误', 'error');
+            }, 800);
+        } finally {
+            isTaskRunning = false;
+            currentXhr = null;
+        }
+    });
+
+    xhr.addEventListener('error', () => {
+        updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 网络错误`);
+        setTimeout(() => {
+            hideProgressModal();
+            showToast('网络错误', 'error');
+        }, 800);
+        isTaskRunning = false;
+        currentXhr = null;
+    });
+
+    xhr.addEventListener('abort', () => {
+        updateGlobalProgress(0, `<span class="status-dot error"></span> 已取消处理`);
+        setTimeout(() => {
+            hideProgressModal();
+            showToast('已取消处理', 'info');
+        }, 400);
+        isTaskRunning = false;
+        currentXhr = null;
+    });
+
+    xhr.open('POST', '/api/convert/batch');
+    xhr.send(formData);
+    simulateBatchProcessProgress(batchFiles.length);
 }
 window.startBatchConvert = startBatchConvert;
 
-// ==================== 显示结果 ====================
+function simulateBatchProcessProgress(total) {
+    setStepActive(1);
+    let p = 0;
+    const timer1 = setInterval(() => {
+        if (!isTaskRunning) return clearInterval(timer1);
+        p += 0.05;
+        if (p >= 1) {
+            clearInterval(timer1);
+            setStepActive(2);
+            let p2 = 0;
+            const timer2 = setInterval(() => {
+                if (!isTaskRunning) return clearInterval(timer2);
+                p2 += 0.02;
+                if (p2 >= 1) {
+                    clearInterval(timer2);
+                    setStepActive(3);
+                    let p3 = 0;
+                    const timer3 = setInterval(() => {
+                        if (!isTaskRunning) return clearInterval(timer3);
+                        p3 += 0.08;
+                        if (p3 >= 1) clearInterval(timer3);
+                        updateGlobalProgress(calcStepProgress(3, p3), `正在 <span class="highlight">批量优化结果</span>`);
+                    }, 150);
+                    return;
+                }
+                const curr = Math.floor(p2 * total);
+                updateGlobalProgress(calcStepProgress(2, p2), `正在 <span class="highlight">批量矢量化</span> ${curr}/${total}`);
+            }, 120);
+            return;
+        }
+        updateGlobalProgress(calcStepProgress(1, p), `正在 <span class="highlight">批量图像分析</span>`);
+    }, 150);
+}
+
+// ==================== 结果展示 ====================
 function showResult(svg) {
     const img = document.getElementById('resultOriginal');
-    img.src = document.getElementById('previewImg').src;
-    zoomState = { original: 1, svg: 1 };
-    img.style.transform = 'scale(1)';
-    document.getElementById('zoomOriginal').textContent = '100%';
     const container = document.getElementById('svgDisplay');
-    container.innerHTML = svg;
-    container.style.transform = 'scale(1)';
-    document.getElementById('zoomSvg').textContent = '100%';
-    document.getElementById('resultSection').hidden = false;
-    document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    initAllZoomDrag(); // 新增：初始化缩放拖拽
-    initZoomDragEvents(); // 新增：结果渲染后绑定缩放事件
+    const resultSection = document.getElementById('resultSection');
+    const previewDom = document.getElementById('previewImg');
+    const origWrapper = document.getElementById('originalWrapper');
+    const svgWrapper = document.getElementById('svgWrapper');
+
+    if (!img || !container || !previewDom || !resultSection || !origWrapper || !svgWrapper) {
+        showToast('页面元素异常，请刷新重试', 'error');
+        return;
+    }
+
+    // 1. 设置原图
+    img.src = previewDom.src;
+
+    // 2. 确保 SVG 有 xmlns
+    if (!svg.includes('xmlns="http://www.w3.org/2000/svg"')) {
+        svg = svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+    }
+
+    // 3. 将 SVG 文本转换为 Blob URL，赋给一个 <img> 标签
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+
+    // 4. 清空容器，放入一个新的 <img> 元素
+    container.innerHTML = '';  // 清除旧的 SVG 节点
+    const svgImg = document.createElement('img');
+    svgImg.src = url;
+    svgImg.alt = 'SVG';
+    svgImg.id = 'svgImg';  // 可选，便于调试
+    container.appendChild(svgImg);
+
+    // 5. 统一设置两个图片的样式（绝对定位 + object-fit 填满容器）
+    const styleBoth = (el) => {
+        el.style.position = 'absolute';
+        el.style.top = '0';
+        el.style.left = '0';
+        el.style.width = '100%';
+        el.style.height = '100%';
+        el.style.objectFit = 'contain';     // 保持比例，居中缩放
+        el.style.display = 'block';
+    };
+    styleBoth(img);
+    styleBoth(svgImg);
+
+    // 6. 设置容器样式
+    container.style.position = 'relative';
+    container.style.width = '100%';
+    container.style.height = '400px';   // 与 wrapper 高度一致
+    container.style.overflow = 'hidden';
+
+    // 7. wrapper 保持 flex 居中（虽已用绝对定位，但无妨）
+    [origWrapper, svgWrapper].forEach(w => {
+        w.style.display = 'flex';
+        w.style.alignItems = 'center';
+        w.style.justifyContent = 'center';
+        w.style.position = 'relative';
+    });
+
+    // 8. 清理 transform 残留
+    [img, container].forEach(el => {
+        el.style.transform = '';
+        el.style.transition = '';
+        el.style.transformOrigin = 'center center';
+    });
+
+    resultSection.hidden = false;
+    resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // 9. 等待图片加载完成后初始化缩放（确保尺寸准确）
+    const initWhenReady = () => {
+        if (img.complete && svgImg.complete) {
+            initAllZoomDrag();
+        } else {
+            // 如果图片还没加载完，监听 load 事件
+            let loaded = 0;
+            const onLoad = () => {
+                loaded++;
+                if (loaded === 2) initAllZoomDrag();
+            };
+            if (!img.complete) img.addEventListener('load', onLoad, { once: true });
+            else loaded++;
+            if (!svgImg.complete) svgImg.addEventListener('load', onLoad, { once: true });
+            else loaded++;
+            if (loaded === 2) initAllZoomDrag();
+        }
+    };
+    setTimeout(initWhenReady, 100);  // 稍微延迟，确保 DOM 已挂载
 }
+window.showResult = showResult;
 
 function showBatchResults(data) {
     const section = document.getElementById('batchResultSection');
@@ -402,6 +783,7 @@ function showBatchResults(data) {
     document.getElementById('batchTotal').textContent = data.total;
     document.getElementById('batchSuccess').textContent = data.success_count;
     document.getElementById('batchFailed').textContent = data.total - data.success_count;
+
     const container = document.getElementById('batchResultItems');
     container.innerHTML = data.results.map((r, i) => `
         <div class="batch-result-item">
@@ -417,7 +799,7 @@ function showBatchResults(data) {
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// ==================== 下载 ====================
+// ==================== 下载相关 ====================
 function downloadSvg() {
     const blob = new Blob([currentSvg], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
@@ -452,189 +834,35 @@ window.downloadSingleBatch = downloadSingleBatch;
 async function downloadBatchZip() {
     const successResults = batchResults.filter(r => r.success);
     if (successResults.length === 0) return showToast('没有可下载的 SVG', 'error');
-    const svgs = successResults.map(r => ({ filename: r.filename.replace(/\.[^/.]+$/, '') + '.svg', svg: r.svg }));
+    
+    const svgs = successResults.map(r => ({ 
+        filename: r.filename.replace(/\.[^/.]+$/, '') + '.svg', 
+        svg: r.svg 
+    }));
     try {
         const res = await fetch('/api/convert/batch/download', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ svgs })
         });
-        if (res.ok) {
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'svg_converts.zip';
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('下载已开始', 'success');
-        } else showToast('下载失败', 'error');
-    } catch (e) { showToast('下载失败', 'error'); }
+        if (!res.ok) throw new Error('请求异常');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'svg_converts.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('ZIP 打包下载已开始', 'success');
+    } catch (err) {
+        showToast('打包下载失败，请重试', 'error');
+    }
 }
 window.downloadBatchZip = downloadBatchZip;
 
-// ==================== 缩放控制 ====================
-// 初始化缩放+拖拽事件
-function initZoomDragEvents() {
-    const originalWrap = document.getElementById('resultOriginal')?.closest('.compare-img-wrapper');
-    const svgWrap = document.getElementById('svgDisplay')?.closest('.compare-img-wrapper');
-
-    // 绑定原图
-    if (originalWrap) {
-        originalWrap.addEventListener('wheel', (e) => handleZoomWheel(e, 'original'), { passive: false });
-        originalWrap.addEventListener('mousedown', (e) => handleDragStart(e, 'original'));
-        originalWrap.addEventListener('dblclick', () => resetZoom('original'));
-    }
-    // 绑定SVG
-    if (svgWrap) {
-        svgWrap.addEventListener('wheel', (e) => handleZoomWheel(e, 'svg'), { passive: false });
-        svgWrap.addEventListener('mousedown', (e) => handleDragStart(e, 'svg'));
-        svgWrap.addEventListener('dblclick', () => resetZoom('svg'));
-    }
-
-    // 全局监听拖拽移动/松开，保证移出容器也不中断
-    window.addEventListener('mousemove', handleDragMove);
-    window.addEventListener('mouseup', handleDragEnd);
-}
-
-// 滚轮缩放：以鼠标指向位置为锚点
-function handleZoomWheel(e, type) {
-    e.preventDefault();
-    const state = zoomState[type];
-    const step = 0.12;
-    const delta = e.deltaY > 0 ? -step : step;
-    const newScale = Math.max(0.2, Math.min(5, state.scale + delta));
-
-    if (Math.abs(newScale - state.scale) < 0.001) return;
-
-    // 计算鼠标在容器内的坐标
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    // 锚点缩放算法：保证鼠标指向的像素位置不动
-    state.tx = mouseX - (mouseX - state.tx) * (newScale / state.scale);
-    state.ty = mouseY - (mouseY - state.ty) * (newScale / state.scale);
-    state.scale = newScale;
-
-    updateTransform(type);
-}
-
-// 开始拖拽
-function handleDragStart(e, type) {
-    if (e.button !== 0) return; // 只响应左键
-    e.preventDefault();
-    dragState.active = true;
-    dragState.type = type;
-    dragState.startX = e.clientX;
-    dragState.startY = e.clientY;
-    dragState.startTx = zoomState[type].tx;
-    dragState.startTy = zoomState[type].ty;
-    // 拖拽时关闭过渡动画，更跟手
-    const el = type === 'original' ? document.getElementById('resultOriginal') : document.getElementById('svgDisplay');
-    if (el) el.style.transition = 'none';
-}
-
-// 拖拽移动
-function handleDragMove(e) {
-    if (!dragState.active) return;
-    const dx = e.clientX - dragState.startX;
-    const dy = e.clientY - dragState.startY;
-    const type = dragState.type;
-
-    zoomState[type].tx = dragState.startTx + dx;
-    zoomState[type].ty = dragState.startTy + dy;
-    updateTransform(type);
-}
-
-// 结束拖拽
-function handleDragEnd() {
-    if (!dragState.active) return;
-    const type = dragState.type;
-    // 恢复过渡动画
-    const el = type === 'original' ? document.getElementById('resultOriginal') : document.getElementById('svgDisplay');
-    if (el) el.style.transition = 'transform 0.2s ease';
-
-    dragState.active = false;
-    dragState.type = null;
-}
-
-// 按钮缩放：以容器中心为锚点
-function zoomImage(type, delta) {
-    const state = zoomState[type];
-    const newScale = Math.max(0.2, Math.min(5, state.scale + delta));
-    if (Math.abs(newScale - state.scale) < 0.001) return;
-
-    const parent = document.getElementById(type === 'original' ? 'resultOriginal' : 'svgDisplay')
-        .closest('.compare-img-wrapper');
-    if (!parent) return;
-
-    const rect = parent.getBoundingClientRect();
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-
-    state.tx = centerX - (centerX - state.tx) * (newScale / state.scale);
-    state.ty = centerY - (centerY - state.ty) * (newScale / state.scale);
-    state.scale = newScale;
-
-    updateTransform(type);
-}
-window.zoomImage = zoomImage;
-
-// 重置缩放：自适应容器居中显示
-function resetZoom(type) {
-    const el = type === 'original'
-        ? document.getElementById('resultOriginal')
-        : document.getElementById('svgDisplay');
-    const parent = el?.closest('.compare-img-wrapper');
-    if (!el || !parent) return;
-
-    // 先清空变换，获取原始尺寸
-    el.style.transform = 'none';
-    requestAnimationFrame(() => {
-        const parentW = parent.clientWidth;
-        const parentH = parent.clientHeight;
-        const contentW = el.offsetWidth;
-        const contentH = el.offsetHeight;
-
-        if (contentW === 0 || contentH === 0) {
-            setTimeout(() => resetZoom(type), 100);
-            return;
-        }
-
-        // 等比适配容器
-        const scale = Math.min(parentW / contentW, parentH / contentH);
-        // 居中偏移
-        const finalW = contentW * scale;
-        const finalH = contentH * scale;
-        const tx = (parentW - finalW) / 2;
-        const ty = (parentH - finalH) / 2;
-
-        zoomState[type] = { scale: scale, tx: tx, ty: ty };
-        updateTransform(type);
-    });
-}
-window.resetZoom = resetZoom;
-
-// 更新元素变换样式
-function updateTransform(type) {
-    const el = type === 'original' 
-        ? document.getElementById('resultOriginal') 
-        : document.getElementById('svgDisplay');
-    if (!el) return;
-
-    const state = zoomState[type];
-    el.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${state.scale})`;
-
-    // 同步百分比显示
-    const percentEl = type === 'original' 
-        ? document.getElementById('zoomOriginal') 
-        : document.getElementById('zoomSvg');
-    if (percentEl) percentEl.textContent = Math.round(state.scale * 100) + '%';
-}
-
-// ---------- 单图增强 ----------
+// ==================== 单图增强 ====================
 function handleEnhanceSingleFile(file) {
+    cancelCurrentTask();
     if (!file.type.startsWith('image/')) {
         showToast('请选择图片文件', 'error');
         return;
@@ -643,100 +871,157 @@ function handleEnhanceSingleFile(file) {
         showToast('文件大小不能超过 10MB', 'error');
         return;
     }
+
     enhanceSelectedFile = file;
     currentEnhancedFilename = file.name;
+
     const reader = new FileReader();
     reader.onload = (e) => {
         document.getElementById('enhancePreviewImg').src = e.target.result;
         document.getElementById('enhanceSingleContent').style.display = 'none';
-        document.getElementById('enhanceBatchContent').style.display = 'none';
         document.getElementById('enhanceUploadPreview').classList.add('active');
         document.getElementById('enhanceBatchFileList').classList.remove('active');
         document.getElementById('enhanceBatchActions').classList.remove('active');
-        // 上传后隐藏算法选择，避免和预览重叠
-        document.getElementById('enhanceSingleAlgo').style.display = 'none';
     };
     reader.readAsDataURL(file);
 }
 
-function startEnhanceSingle() {
+function startEnhanceSingle(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
     if (!requireAuth()) return;
     if (!enhanceSelectedFile) return showToast('请选择一张图片', 'error');
-    if (isConverting) return;
+    if (isTaskRunning) return showToast('正在处理中，请稍候', 'info');
 
     const btn = document.getElementById('enhanceBtn');
-    setLoading(btn, true);
-    isConverting = true;
+    const progressModal = document.getElementById('progressModal');
+    if (!btn || !progressModal) {
+        showToast('页面元素异常，请刷新重试', 'error');
+        return;
+    }
 
-    // 修复：读取单图增强专属的算法选项
-    const algo = document.querySelector('input[name="enhanceAlgoSingle"]:checked')?.value || 'self';
+    cancelCurrentTask();
+    isTaskRunning = true;
+    setLoading(btn, true);
+    showProgressModal();
+    setStepActive(0);
+
+    const algo = document.querySelector('input[name="globalEnhanceAlgo"]:checked')?.value || 'self';
     const formData = new FormData();
     formData.append('image', enhanceSelectedFile);
     formData.append('mode', algo);
 
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        progress += Math.random() * 2 + 0.5;
-        if (progress > 95) progress = 95;
-        const statusText = algo === 'realesrgan' ? 'Real-ESRGAN超分' : '画质增强';
-        const statusHtml = `
-            <span class="status-dot processing"></span>
-            正在 <span class="highlight">${statusText}</span>
-        `;
-        showProgress(statusHtml, progress, 2);
-    }, 200);
+    const xhr = new XMLHttpRequest();
+    currentXhr = xhr;
 
-    try {
-        fetch('/api/enhance', { method: 'POST', body: formData })
-            .then(res => res.json())
-            .then(data => {
-                clearInterval(progressInterval);
-                if (data.enhanced_image) {
-                    currentEnhancedImage = data.enhanced_image;
-                    currentEnhancedFilename = data.filename;
-                    const successText = algo === 'realesrgan' ? '超分完成' : '增强完成';
-                    showProgress(`<span class="status-dot done"></span> 🎉 ${successText}！`, 100, 4);
-                    setTimeout(() => {
-                        hideProgress();
-                        showEnhanceResult();
-                        showToast(`${successText}！`, 'success');
-                    }, 600);
-                } else {
-                    const failText = algo === 'realesrgan' ? '超分失败' : '增强失败';
-                    showProgress(`<span class="status-dot error"></span> ❌ ${failText}`, 100, 4);
-                    setTimeout(() => {
-                        hideProgress();
-                        showToast(data.error || '处理失败', 'error');
-                    }, 800);
-                }
-            })
-            .catch(() => {
-                clearInterval(progressInterval);
-                hideProgress();
+    xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+            const percent = e.loaded / e.total;
+            const totalPercent = calcStepProgress(0, percent);
+            updateGlobalProgress(totalPercent, `正在 <span class="highlight">上传文件</span>`);
+        }
+    });
+
+    xhr.upload.addEventListener('load', () => {
+        if (!isTaskRunning) return;
+        setStepActive(2);
+        let progress = 0;
+        const timer = setInterval(() => {
+            if (!isTaskRunning) return clearInterval(timer);
+            progress += Math.random() * 2 + 0.5;
+            if (progress > 95) progress = 95;
+            const statusText = algo === 'realesrgan' ? 'Real-ESRGAN超分' : '画质增强';
+            updateGlobalProgress(calcStepProgress(2, progress / 100), `正在 <span class="highlight">${statusText}</span>`);
+        }, 200);
+        xhr._progressTimer = timer;
+    });
+
+    xhr.addEventListener('load', () => {
+        clearInterval(xhr._progressTimer);
+        try {
+            const data = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300 && data.enhanced_image) {
+                setStepActive(4);
+                updateGlobalProgress(100, `<span class="status-dot done"></span> 🎉 处理完成！`);
+                
+                currentEnhancedImage = data.enhanced_image;
+                currentEnhancedFilename = data.filename;
+                
+                setTimeout(() => {
+                    hideProgressModal();
+                    showEnhanceResult();
+                    showToast('增强完成！', 'success');
+                }, 600);
+            } else {
+                setStepActive(4);
+                updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 处理失败`);
+                setTimeout(() => {
+                    hideProgressModal();
+                    showToast(data.error || '处理失败', 'error');
+                }, 800);
+            }
+        } catch (e) {
+            updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 响应解析失败`);
+            setTimeout(() => {
+                hideProgressModal();
                 showToast('网络错误', 'error');
-            })
-            .finally(() => {
-                setLoading(btn, false);
-                isConverting = false;
-            });
-    } catch (e) {
-        clearInterval(progressInterval);
-        hideProgress();
+            }, 800);
+        } finally {
+            setLoading(btn, false);
+            isTaskRunning = false;
+            currentXhr = null;
+        }
+    });
+
+    xhr.addEventListener('error', () => {
+        clearInterval(xhr._progressTimer);
+        updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 网络错误`);
+        setTimeout(() => {
+            hideProgressModal();
+            showToast('网络错误', 'error');
+        }, 800);
         setLoading(btn, false);
-        isConverting = false;
-        showToast('网络错误', 'error');
-    }
+        isTaskRunning = false;
+        currentXhr = null;
+    });
+
+    xhr.addEventListener('abort', () => {
+        clearInterval(xhr._progressTimer);
+        updateGlobalProgress(0, `<span class="status-dot error"></span> 已取消处理`);
+        setTimeout(() => {
+            hideProgressModal();
+            showToast('已取消处理', 'info');
+        }, 400);
+        setLoading(btn, false);
+        isTaskRunning = false;
+        currentXhr = null;
+    });
+
+    xhr.open('POST', '/api/enhance');
+    xhr.send(formData);
 }
+window.startEnhanceSingle = startEnhanceSingle;
 
 function showEnhanceResult() {
-    document.getElementById('enhanceOriginalImg').src = document.getElementById('enhancePreviewImg').src;
-    document.getElementById('enhanceResultImg').src = currentEnhancedImage;
+    const originalImg = document.getElementById('enhanceOriginalImg');
+    const resultImg = document.getElementById('enhanceResultImg');
+    const section = document.getElementById('enhanceResultSection');
 
-    document.getElementById('enhanceResultSection').hidden = false;
-    document.getElementById('enhanceResultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!originalImg || !resultImg || !section) {
+        showToast('页面元素异常，请刷新重试', 'error');
+        return;
+    }
 
-    initAllZoomDrag(); // 初始化滚轮缩放+拖拽（和转换页同款）
+    originalImg.src = document.getElementById('enhancePreviewImg').src;
+    resultImg.src = currentEnhancedImage;
+    section.hidden = false;
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    setTimeout(initAllZoomDrag, 100);
 }
+window.showEnhanceResult = showEnhanceResult;
 
 function downloadEnhancedImage() {
     if (!currentEnhancedImage) return;
@@ -747,109 +1032,92 @@ function downloadEnhancedImage() {
     a.click();
     showToast('下载已开始', 'success');
 }
+window.downloadEnhancedImage = downloadEnhancedImage;
 
 function convertEnhancedToSvg() {
     if (!requireAuth()) return;
-    if (!enhanceSelectedFile) return;
-    if (isConverting) return;
-    isConverting = true;
+    if (!enhanceSelectedFile) return showToast('请先选择图片', 'error');
+    if (isTaskRunning) return showToast('正在处理中，请稍候', 'info');
 
-    // 修复：读取单图增强的算法选项
-    const algo = document.querySelector('input[name="enhanceAlgoSingle"]:checked')?.value || 'self';
+    isTaskRunning = true;
+    showProgressModal();
+    setStepActive(0);
+
+    const algo = document.querySelector('input[name="globalEnhanceAlgo"]:checked')?.value || 'self';
     const formData = new FormData();
     formData.append('image', enhanceSelectedFile);
     formData.append('mode', algo);
 
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        progress += Math.random() * 1.5 + 0.3;
-        if (progress > 95) progress = 95;
-        const actionText = algo === 'realesrgan' ? '超分并矢量化' : '增强并矢量化';
-        const statusHtml = `
-            <span class="status-dot processing"></span>
-            正在 <span class="highlight">${actionText}</span>
-        `;
-        showProgress(statusHtml, progress, 2);
-    }, 200);
+    const xhr = new XMLHttpRequest();
+    currentXhr = xhr;
 
-    fetch('/api/enhance/convert', { method: 'POST', body: formData })
-        .then(res => res.json())
-        .then(data => {
-            clearInterval(progressInterval);
-            if (data.svg) {
+    xhr.upload.addEventListener('load', () => {
+        if (!isTaskRunning) return;
+        setStepActive(2);
+        let progress = 0;
+        const timer = setInterval(() => {
+            if (!isTaskRunning) return clearInterval(timer);
+            progress += Math.random() * 1.5 + 0.3;
+            if (progress > 95) progress = 95;
+            const actionText = algo === 'realesrgan' ? '超分并矢量化' : '增强并矢量化';
+            updateGlobalProgress(calcStepProgress(2, progress / 100), `正在 <span class="highlight">${actionText}</span>`);
+        }, 200);
+        xhr._progressTimer = timer;
+    });
+
+    xhr.addEventListener('load', () => {
+        clearInterval(xhr._progressTimer);
+        try {
+            const data = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300 && data.svg) {
+                setStepActive(4);
+                updateGlobalProgress(100, `<span class="status-dot done"></span> 🎉 转换完成！`);
+                
                 currentSvg = data.svg;
                 currentFilename = data.filename || enhanceSelectedFile.name;
-                showProgress(`<span class="status-dot done"></span> 🎉 转换完成！`, 100, 4);
+                
                 setTimeout(() => {
-                    hideProgress();
+                    hideProgressModal();
                     showResult(data.svg);
                     showToast('处理+转换成功！', 'success');
                 }, 600);
             } else {
-                showProgress(`<span class="status-dot error"></span> ❌ 转换失败`, 100, 4);
+                setStepActive(4);
+                updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 转换失败`);
                 setTimeout(() => {
-                    hideProgress();
+                    hideProgressModal();
                     showToast(data.error || '转换失败', 'error');
                 }, 800);
             }
-        })
-        .catch(() => {
-            clearInterval(progressInterval);
-            hideProgress();
+        } catch (e) {
+            updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 响应解析失败`);
+            setTimeout(() => {
+                hideProgressModal();
+                showToast('网络错误', 'error');
+            }, 800);
+        } finally {
+            isTaskRunning = false;
+            currentXhr = null;
+        }
+    });
+
+    xhr.addEventListener('error', () => {
+        clearInterval(xhr._progressTimer);
+        updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 网络错误`);
+        setTimeout(() => {
+            hideProgressModal();
             showToast('网络错误', 'error');
-        })
-        .finally(() => {
-            isConverting = false;
-        });
-}
+        }, 800);
+        isTaskRunning = false;
+        currentXhr = null;
+    });
 
-
-function zoomEnhance(type, delta) {
-    const selector = type === 'original'
-        ? '#enhanceResultSection .compare-item:nth-child(1) .compare-img-wrapper'
-        : '#enhanceResultSection .compare-item:nth-child(3) .compare-img-wrapper';
-    const wrapper = document.querySelector(selector);
-    if (wrapper && wrapper.zoomBy) wrapper.zoomBy(delta);
+    xhr.open('POST', '/api/enhance/convert');
+    xhr.send(formData);
 }
-window.zoomEnhance = zoomEnhance;
+window.convertEnhancedToSvg = convertEnhancedToSvg;
 
-function resetEnhanceZoom(type) {
-    const selector = type === 'original'
-        ? '#enhanceResultSection .compare-item:nth-child(1) .compare-img-wrapper'
-        : '#enhanceResultSection .compare-item:nth-child(3) .compare-img-wrapper';
-    const wrapper = document.querySelector(selector);
-    if (wrapper && wrapper.resetZoom) wrapper.resetZoom();
-}
-window.resetEnhanceZoom = resetEnhanceZoom;
-
-function resetEnhanceUpload() {
-    enhanceSelectedFile = null;
-    enhanceBatchFiles = [];
-    enhanceBatchResults = [];
-    currentEnhancedImage = '';
-    
-    document.getElementById('fileInput').value = '';
-    document.getElementById('batchFileInput').value = '';
-    
-    document.getElementById('enhanceSingleContent').style.display = currentMode === 'enhance_single' ? '' : 'none';
-    document.getElementById('enhanceBatchContent').style.display = currentMode === 'enhance_batch' ? '' : 'none';
-    document.getElementById('enhanceUploadPreview').classList.remove('active');
-    document.getElementById('enhanceBatchFileList').classList.remove('active');
-    document.getElementById('enhanceBatchActions').classList.remove('active');
-    document.getElementById('enhanceResultSection').hidden = true;
-    document.getElementById('enhanceBatchResultSection').hidden = true;
-    
-    // 重置时重新显示算法选择
-    if (currentMode === 'enhance_single') {
-        document.getElementById('enhanceSingleAlgo').style.display = 'grid';
-    } else if (currentMode === 'enhance_batch') {
-        document.getElementById('enhanceBatchAlgo').style.display = 'grid';
-    }
-    
-    hideProgress();
-    enhanceZoomState = { original: 1, result: 1 };
-}
-// ---------- 批量增强 ----------
+// ==================== 批量增强 ====================
 function handleEnhanceBatchFiles(files) {
     const validFiles = files.filter(f => {
         if (!f.type.startsWith('image/')) {
@@ -862,19 +1130,19 @@ function handleEnhanceBatchFiles(files) {
         }
         return true;
     });
+
     if (enhanceBatchFiles.length + validFiles.length > 20) {
         showToast('最多支持 20 张图片', 'error');
         return;
     }
+
     enhanceBatchFiles = [...enhanceBatchFiles, ...validFiles];
     renderEnhanceBatchList();
     
+    document.getElementById('enhanceBatchContent').style.display = 'none';
     document.getElementById('enhanceBatchFileList').classList.add('active');
     document.getElementById('enhanceBatchActions').classList.add('active');
     document.getElementById('enhanceSingleContent').style.display = 'none';
-    document.getElementById('enhanceBatchContent').style.display = 'none';
-    // 上传后隐藏算法选择
-    document.getElementById('enhanceBatchAlgo').style.display = 'none';
 }
 
 function renderEnhanceBatchList() {
@@ -903,77 +1171,138 @@ function removeEnhanceBatchFile(index) {
         renderEnhanceBatchList();
     }
 }
+window.removeEnhanceBatchFile = removeEnhanceBatchFile;
 
-function startEnhanceBatch() {
+function startEnhanceBatch(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
     if (!requireAuth()) return;
     if (enhanceBatchFiles.length === 0) return showToast('请选择图片', 'error');
-    if (isConverting) return;
-    isConverting = true;
+    if (isTaskRunning) return showToast('正在处理中，请稍候', 'info');
+
+    const progressModal = document.getElementById('progressModal');
+    if (!progressModal) {
+        showToast('页面元素异常，请刷新重试', 'error');
+        return;
+    }
+
+    cancelCurrentTask();
+    isTaskRunning = true;
     enhanceBatchResults = [];
-    document.getElementById('enhanceBatchResultSection').hidden = true;
-    
+    showProgressModal();
+    setStepActive(0);
+
     document.querySelectorAll('#enhanceBatchFileList .file-status').forEach(el => {
         el.className = 'file-status processing';
         el.textContent = '处理中...';
     });
 
-    // 修复：读取批量增强专属的算法选项
-    const algo = document.querySelector('input[name="enhanceAlgoBatch"]:checked')?.value || 'self';
+    const algo = document.querySelector('input[name="globalEnhanceAlgo"]:checked')?.value || 'self';
     const formData = new FormData();
     enhanceBatchFiles.forEach(f => formData.append('images', f));
     formData.append('mode', algo);
 
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        progress += Math.random() * 1.5 + 0.5;
-        if (progress > 95) progress = 95;
-        const actionText = algo === 'realesrgan' ? '超分' : '增强';
-        const statusHtml = `
-            <span class="status-dot processing"></span>
-            批量${actionText}中 <span class="highlight">${Math.floor(progress / 100 * enhanceBatchFiles.length)}/${enhanceBatchFiles.length}</span>
-        `;
-        showProgress(statusHtml, progress, 2);
-    }, 300);
+    const xhr = new XMLHttpRequest();
+    currentXhr = xhr;
 
-    fetch('/api/enhance/batch', { method: 'POST', body: formData })
-        .then(res => res.json())
-        .then(data => {
-            clearInterval(progressInterval);
-            if (data.results) {
+    xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+            const percent = e.loaded / e.total;
+            const totalPercent = calcStepProgress(0, percent);
+            updateGlobalProgress(totalPercent, `正在 <span class="highlight">批量上传文件</span>`);
+        }
+    });
+
+    xhr.upload.addEventListener('load', () => {
+        if (!isTaskRunning) return;
+        setStepActive(2);
+        let progress = 0;
+        const timer = setInterval(() => {
+            if (!isTaskRunning) return clearInterval(timer);
+            progress += Math.random() * 1.5 + 0.5;
+            if (progress > 95) progress = 95;
+            const actionText = algo === 'realesrgan' ? '超分' : '增强';
+            updateGlobalProgress(calcStepProgress(2, progress / 100), `批量${actionText}中 <span class="highlight">${Math.floor(progress / 100 * enhanceBatchFiles.length)}/${enhanceBatchFiles.length}</span>`);
+        }, 300);
+        xhr._progressTimer = timer;
+    });
+
+    xhr.addEventListener('load', () => {
+        clearInterval(xhr._progressTimer);
+        try {
+            const data = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300 && data.results) {
+                setStepActive(4);
                 enhanceBatchResults = data.results || [];
+
                 const items = document.querySelectorAll('#enhanceBatchFileList .batch-file-item');
-                enhanceBatchResults.forEach((r, i) => {
-                    if (items[i]) {
-                        const status = items[i].querySelector('.file-status');
-                        if (r.success) { status.className = 'file-status done'; status.textContent = '✅ 完成'; }
-                        else { status.className = 'file-status error'; status.textContent = '❌ ' + (r.error || '失败'); }
+                data.results.forEach((resItem, idx) => {
+                    if(items[idx]){
+                        const statusDom = items[idx].querySelector('.file-status');
+                        if(resItem.success){
+                            statusDom.className = 'file-status done';
+                            statusDom.textContent = '✅ 完成';
+                        }else{
+                            statusDom.className = 'file-status error';
+                            statusDom.textContent = '❌ 失败';
+                        }
                     }
                 });
-                const actionText = algo === 'realesrgan' ? '超分' : '增强';
-                showProgress(`<span class="status-dot done"></span> 🎉 批量${actionText}完成！成功 ${data.success_count}/${data.total}`, 100, 4);
+
+                updateGlobalProgress(100, `<span class="status-dot done"></span> 🎉 批量处理完成！成功 ${data.success_count}/${data.total}`);
                 setTimeout(() => {
-                    hideProgress();
+                    hideProgressModal();
                     showEnhanceBatchResults(data);
                     showToast(`处理完成: ${data.success_count}/${data.total} 成功`, 'success');
                 }, 600);
             } else {
-                showProgress(`<span class="status-dot error"></span> ❌ 批量处理失败`, 100, 4);
+                setStepActive(4);
+                updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 批量处理失败`);
                 setTimeout(() => {
-                    hideProgress();
+                    hideProgressModal();
                     showToast(data.error || '批量处理失败', 'error');
                 }, 800);
             }
-        })
-        .catch(() => {
-            clearInterval(progressInterval);
-            hideProgress();
-            showToast('网络错误', 'error');
-        })
-        .finally(() => {
-            isConverting = false;
-        });
-}
+        } catch (e) {
+            updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 响应解析失败`);
+            setTimeout(() => {
+                hideProgressModal();
+                showToast('网络错误', 'error');
+            }, 800);
+        } finally {
+            isTaskRunning = false;
+            currentXhr = null;
+        }
+    });
 
+    xhr.addEventListener('error', () => {
+        clearInterval(xhr._progressTimer);
+        updateGlobalProgress(100, `<span class="status-dot error"></span> ❌ 网络错误`);
+        setTimeout(() => {
+            hideProgressModal();
+            showToast('网络错误', 'error');
+        }, 800);
+        isTaskRunning = false;
+        currentXhr = null;
+    });
+
+    xhr.addEventListener('abort', () => {
+        clearInterval(xhr._progressTimer);
+        updateGlobalProgress(0, `<span class="status-dot error"></span> 已取消处理`);
+        setTimeout(() => {
+            hideProgressModal();
+            showToast('已取消处理', 'info');
+        }, 400);
+        isTaskRunning = false;
+        currentXhr = null;
+    });
+
+    xhr.open('POST', '/api/enhance/batch');
+    xhr.send(formData);
+}
+window.startEnhanceBatch = startEnhanceBatch;
 
 function showEnhanceBatchResults(data) {
     const section = document.getElementById('enhanceBatchResultSection');
@@ -994,7 +1323,6 @@ function showEnhanceBatchResults(data) {
             `}
         </div>
     `).join('');
-
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1007,6 +1335,7 @@ function downloadSingleEnhanceBatch(index) {
     a.click();
     showToast('下载已开始', 'success');
 }
+window.downloadSingleEnhanceBatch = downloadSingleEnhanceBatch;
 
 function downloadEnhanceBatchZip() {
     const successResults = enhanceBatchResults.filter(r => r.success);
@@ -1037,106 +1366,77 @@ function downloadEnhanceBatchZip() {
     })
     .catch(() => showToast('下载失败', 'error'));
 }
-
-// 挂载全局
-window.handleEnhanceSingleFile = handleEnhanceSingleFile;
-window.handleEnhanceBatchFiles = handleEnhanceBatchFiles;
-window.startEnhanceSingle = startEnhanceSingle;
-window.startEnhanceBatch = startEnhanceBatch;
-window.downloadEnhancedImage = downloadEnhancedImage;
-window.convertEnhancedToSvg = convertEnhancedToSvg;
-window.zoomEnhance = zoomEnhance;
-window.resetEnhanceUpload = resetEnhanceUpload;
-window.removeEnhanceBatchFile = removeEnhanceBatchFile;
-window.downloadSingleEnhanceBatch = downloadSingleEnhanceBatch;
 window.downloadEnhanceBatchZip = downloadEnhanceBatchZip;
 
-// ==================== 通用滚轮缩放 + 拖拽平移 ====================
-function initImageZoom(wrapperSelector, targetSelector) {
-    const wrapper = document.querySelector(wrapperSelector);
-    const target = document.querySelector(targetSelector);
-    if (!wrapper || !target) return;
-
-    // 状态挂载在容器上，避免全局冲突
-    wrapper.zoomData = { scale: 1, x: 0, y: 0 };
-    const state = wrapper.zoomData;
-
-    function apply() {
-        target.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
-        const label = wrapper.querySelector('.zoom-level');
-        if (label) label.textContent = Math.round(state.scale * 100) + '%';
+// ==================== 缩放控制 ====================
+function zoomImage(type, delta) {
+    let wrapper;
+    if (type === 'original') {
+        wrapper = document.querySelector('#resultSection .compare-item:first-child .compare-img-wrapper');
+    } else {
+        wrapper = document.querySelector('#resultSection .compare-item:last-child .compare-img-wrapper');
     }
-
-    // 滚轮缩放：以鼠标指向位置为中心
-    wrapper.addEventListener('wheel', (e) => {
-        e.preventDefault();
-        const rect = wrapper.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
-
-        const oldScale = state.scale;
-        const step = e.deltaY > 0 ? -0.1 : 0.1;
-        state.scale = Math.max(0.2, Math.min(4, state.scale + step));
-        const ratio = state.scale / oldScale;
-
-        // 保持鼠标指向的点位置不变
-        state.x = mx - (mx - state.x) * ratio;
-        state.y = my - (my - state.y) * ratio;
-        apply();
-    }, { passive: false });
-
-    // 拖拽平移
-    let dragging = false;
-    let startX = 0, startY = 0;
-    wrapper.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        dragging = true;
-        startX = e.clientX - state.x;
-        startY = e.clientY - state.y;
-        target.style.transition = 'none';
-        wrapper.style.cursor = 'grabbing';
-    });
-    window.addEventListener('mousemove', (e) => {
-        if (!dragging) return;
-        state.x = e.clientX - startX;
-        state.y = e.clientY - startY;
-        apply();
-    });
-    window.addEventListener('mouseup', () => {
-        if (dragging) {
-            dragging = false;
-            target.style.transition = 'transform 0.2s ease';
-            wrapper.style.cursor = 'grab';
-        }
-    });
-
-    // 双击重置
-    wrapper.addEventListener('dblclick', () => {
-        state.scale = 1;
-        state.x = 0;
-        state.y = 0;
-        apply();
-    });
-
-    // 暴露给按钮调用
-    wrapper.zoomBy = (delta) => {
-        state.scale = Math.max(0.2, Math.min(4, state.scale + delta));
-        apply();
-    };
-    wrapper.resetZoom = () => {
-        state.scale = 1;
-        state.x = 0;
-        state.y = 0;
-        apply();
-    };
+    if (wrapper && wrapper.zoomBy) wrapper.zoomBy(delta);
 }
+window.zoomImage = zoomImage;
 
-// 初始化所有模式的图片缩放
+function resetZoom(type) {
+    let wrapper;
+    if (type === 'original') {
+        wrapper = document.querySelector('#resultSection .compare-item:first-child .compare-img-wrapper');
+    } else {
+        wrapper = document.querySelector('#resultSection .compare-item:last-child .compare-img-wrapper');
+    }
+    if (wrapper && wrapper.resetZoom) wrapper.resetZoom();
+}
+window.resetZoom = resetZoom;
+
+function zoomEnhance(type, delta) {
+    let wrapper;
+    if (type === 'original') {
+        wrapper = document.querySelector('#enhanceResultSection .compare-item:first-child .compare-img-wrapper');
+    } else {
+        wrapper = document.querySelector('#enhanceResultSection .compare-item:last-child .compare-img-wrapper');
+    }
+    if (wrapper && wrapper.zoomBy) wrapper.zoomBy(delta);
+}
+window.zoomEnhance = zoomEnhance;
+
+function resetEnhanceZoom(type) {
+    let wrapperId;
+    if (type === 'original') {
+        wrapperId = 'enhanceOriginalWrapper';
+    } else {
+        wrapperId = 'enhanceResultWrapper';
+    }
+    const wrapper = document.getElementById(wrapperId);
+    if (wrapper && wrapper.resetZoom) {
+        wrapper.resetZoom();
+    }
+}
+window.resetEnhanceZoom = resetEnhanceZoom;
+
+
+
+
 function initAllZoomDrag() {
-    // 单图转换
-    initImageZoom('#resultSection .compare-item:nth-child(1) .compare-img-wrapper', '#resultOriginal');
-    initImageZoom('#resultSection .compare-item:nth-child(3) .compare-img-wrapper', '#svgDisplay');
-    // 单图增强
-    initImageZoom('#enhanceResultSection .compare-item:nth-child(1) .compare-img-wrapper', '#enhanceOriginalImg');
-    initImageZoom('#enhanceResultSection .compare-item:nth-child(3) .compare-img-wrapper', '#enhanceResultImg');
+    initImageZoom('#originalWrapper', '#resultOriginal');
+    // SVG 容器内的新 img 元素
+    initImageZoom('#svgWrapper', '#svgDisplay img');
+    // 增强区域保持不变
+    initImageZoom('#enhanceOriginalWrapper', '#enhanceOriginalImg');
+    initImageZoom('#enhanceResultWrapper', '#enhanceResultImg');
 }
+
+// ==================== 独立缩放按钮绑定 ====================
+window.zoomImage = (type, delta) => {
+    const wrapper = document.getElementById(type === 'original' ? 'originalWrapper' : 'svgWrapper');
+    if (wrapper && wrapper.zoomBy) wrapper.zoomBy(delta);
+};
+window.zoomEnhance = (type, delta) => {
+    const wrapper = document.getElementById(type === 'original' ? 'enhanceOriginalWrapper' : 'enhanceResultWrapper');
+    if (wrapper && wrapper.zoomBy) wrapper.zoomBy(delta);
+};
+// 如果你还有重置按钮，也可以绑定：
+
+window.resetEnhanceZoom = () => { if (enhanceZoom) enhanceZoom.reset(); };

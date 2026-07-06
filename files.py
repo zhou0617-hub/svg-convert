@@ -1,6 +1,5 @@
 ﻿from flask import Blueprint, send_from_directory, current_app
-from flask_login import login_required
-
+from flask_login import login_required, current_user
 files_bp = Blueprint('files', __name__)
 
 @files_bp.route('/api/files/<filename>')

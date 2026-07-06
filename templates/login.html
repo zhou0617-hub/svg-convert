@@ -58,7 +58,7 @@
                     <p>登录您的账号</p>
                 </div>
 
-                <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)">
+                <form onsubmit="event.preventDefault(); handleLogin(event);">
                     <div class="form-group">
                         <label>用户名</label>
                         <input type="text" name="username" required placeholder="请输入用户名" autocomplete="username">
@@ -83,9 +83,9 @@
 
     <!-- Toast -->
     <div class="toast-container" id="toastContainer"></div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="{{ url_for('static', filename='js/three-bg.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/login.js') }}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="{{ url_for('static', filename='js/three-bg.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/login.js') }}?v=1"></script>
 </body>
 </html>
